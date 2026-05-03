@@ -1,0 +1,10 @@
+[package]
+name = "rust-value-betting-engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4"
+deunicode = "1"
+strsim = "0.11.1"
+uuid = { version = "1.23.1", features = ["v4"] }
