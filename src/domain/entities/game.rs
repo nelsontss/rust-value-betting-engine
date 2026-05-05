@@ -8,6 +8,8 @@ use deunicode::deunicode;
 use strsim;
 use uuid::Uuid;
 
+use crate::domain::entities::market::{Market, MarketType};
+
 #[cfg(test)]
 mod tests;
 
@@ -20,6 +22,7 @@ pub struct Game {
     competition: String,
     platform: String,
     pub date: NaiveDateTime,
+    pub markets: HashMap<MarketType, Market>,
 }
 
 struct SimilarityWeights;
@@ -48,6 +51,7 @@ impl Game {
             competition: competition.to_string(),
             platform: platform.to_string(),
             date,
+            markets: HashMap::new(),
         }
     }
 

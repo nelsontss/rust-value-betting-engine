@@ -41,7 +41,7 @@ fn assert_cluster_sizes(cluster_service: &ClusterService, expected_sizes: &[usiz
         .clusters
         .values()
         .flat_map(|clusters_on_date| clusters_on_date.iter())
-        .map(|cluster| cluster.game_ids.len())
+        .map(|cluster| cluster.game_count())
         .collect();
 
     cluster_sizes.sort_unstable();
@@ -116,7 +116,7 @@ fn clusters_games_by_similarity_when_they_are_fully_equal() {
         arsenal_burnley("Betclic"),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -133,7 +133,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_names() {
         fuzzy_england_game("Man United", "Arsenal", "Betclic"),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -197,7 +197,7 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 2]);
 }
@@ -261,7 +261,7 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 2]);
 }
@@ -334,7 +334,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -407,7 +407,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -480,7 +480,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -526,7 +526,7 @@ fn keeps_distinct_fixtures_separate_when_country_competition_and_date_match() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2]);
 }
@@ -563,7 +563,7 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let cluster_service = ClusterService::new(&games);
 
     assert_cluster_sizes(&cluster_service, &[1, 2]);
 }
