@@ -34,18 +34,18 @@ fn moneyline_market(id: &str, home: f64, away: f64) -> (MarketType, Market) {
     )
 }
 
-fn total_market(id: &str, line: f64, over: f64, under: f64) -> (MarketType, Market) {
+fn total_market(id: &str, line: f32, over: f64, under: f64) -> (MarketType, Market) {
     (
         MarketType::Total {
-            line: line.to_string(),
+            line: (line * 100.0) as i32,
         },
         Market::Total(TotalMarket::new(id, Line(line), Odd(over), Odd(under))),
     )
 }
 
-fn total_market_type(line: f64) -> MarketType {
+fn total_market_type(line: f32) -> MarketType {
     MarketType::Total {
-        line: line.to_string(),
+        line: (line * 100.0) as i32,
     }
 }
 
@@ -149,5 +149,31 @@ fn try_to_add_game_creates_a_group_for_new_market_types() {
         &cluster,
         &total_market_type(2.5),
         vec![&second_game.markets[&total_market_type(2.5)]],
+    );
+}
+
+#[test]
+fn try_to_add_game_keeps_total_markets_with_different_lines_in_separate_groups() {
+    let first_game = game_with_markets("Betano", vec![total_market("betano-total", 2.5, 1.9, 1.9)]);
+    let second_game = game_with_markets(
+        "Betclic",
+        vec![total_market("betclic-total", 3.0, 2.0, 1.85)],
+    );
+
+    let mut cluster = FixtureCluster::new(&first_game);
+
+    assert!(cluster.try_to_add_game(&second_game));
+
+    assert_eq!(2, cluster.game_count());
+    assert_eq!(2, cluster.markets.len());
+    assert_market_group(
+        &cluster,
+        &total_market_type(2.5),
+        vec![&first_game.markets[&total_market_type(2.5)]],
+    );
+    assert_market_group(
+        &cluster,
+        &total_market_type(3.0),
+        vec![&second_game.markets[&total_market_type(3.0)]],
     );
 }

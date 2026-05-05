@@ -2,7 +2,7 @@
 pub struct Odd(pub f64);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Line(pub f64);
+pub struct Line(pub f32);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchResultMarket {
@@ -327,7 +327,7 @@ impl Market {
 pub enum MarketType {
     MatchResult,
     Moneyline,
-    Total { line: String },
-    Handicap { line: String },
-    AsianHandicap { line: String },
+    Total { line: i32 },
+    Handicap { line: i32 },
+    AsianHandicap { line: i32 },
 }
