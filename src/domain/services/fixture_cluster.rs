@@ -1,7 +1,7 @@
 use core::fmt;
 use std::collections::HashMap;
 
-use crate::domain::entities::{Game, Market, MarketType};
+use crate::domain::entities::{Arbitrage, Game, MarketGroup, MarketType};
 
 #[cfg(test)]
 mod tests;
@@ -9,7 +9,7 @@ mod tests;
 pub struct FixtureCluster<'a> {
     key: String,
     games: Vec<&'a Game>,
-    markets: HashMap<MarketType, Vec<&'a Market>>,
+    markets: HashMap<MarketType, MarketGroup<'a>>,
 }
 
 impl<'a> FixtureCluster<'a> {
@@ -20,7 +20,11 @@ impl<'a> FixtureCluster<'a> {
             markets: game
                 .markets
                 .iter()
-                .map(|(market_type, market)| (market_type.clone(), vec![market]))
+                .map(|(_, market)| {
+                    let group = MarketGroup::from_market(market);
+                    let market_type = group.market_type();
+                    (market_type, group)
+                })
                 .collect(),
         }
     }
@@ -47,12 +51,22 @@ impl<'a> FixtureCluster<'a> {
 
     fn add_game(&mut self, game: &'a Game) {
         self.games.push(game);
-        for (market_type, market) in game.markets.iter() {
+        for market in game.markets.values() {
+            let group = MarketGroup::from_market(market);
+            let market_type = group.market_type();
+
             self.markets
-                .entry(market_type.clone())
-                .or_default()
-                .push(market);
+                .entry(market_type)
+                .and_modify(|existing_group| existing_group.push_market(market))
+                .or_insert(group);
         }
+    }
+
+    fn arbitrage_opportunites(&self) -> Vec<Arbitrage> {
+        self.markets
+            .values()
+            .filter_map(MarketGroup::arbitrage)
+            .collect()
     }
 }
 
