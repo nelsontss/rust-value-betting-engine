@@ -14,16 +14,15 @@ fn fixture_date(hour: u32, min: u32) -> NaiveDateTime {
 }
 
 fn game_with_markets(platform: &str, markets: Vec<(MarketType, Market)>) -> SharedGame {
-    let mut game = Game::new(
+    let game = Game::new(
         "FC Porto",
         "SL Benfica",
         "Portugal",
         "Liga Portugal",
         fixture_date(15, 30),
         platform,
+        markets.into_iter().map(|(_, market)| market).collect(),
     );
-
-    game.markets.extend(markets);
 
     Arc::new(RwLock::new(game))
 }
@@ -114,12 +113,12 @@ fn new_groups_initial_game_markets_by_type() {
     assert_eq!(1, cluster.game_count());
     assert_moneyline_group(
         &cluster,
-        vec![as_moneyline(&game.markets[&MarketType::Moneyline])],
+        vec![as_moneyline(&game.markets()[&MarketType::Moneyline])],
     );
     assert_total_group(
         &cluster,
         &total_market_type(2.5),
-        vec![as_total(&game.markets[&total_market_type(2.5)])],
+        vec![as_total(&game.markets()[&total_market_type(2.5)])],
     );
 }
 
@@ -151,16 +150,16 @@ fn try_to_add_game_appends_markets_to_existing_groups() {
     assert_moneyline_group(
         &cluster,
         vec![
-            as_moneyline(&first_game.markets[&MarketType::Moneyline]),
-            as_moneyline(&second_game.markets[&MarketType::Moneyline]),
+            as_moneyline(&first_game.markets()[&MarketType::Moneyline]),
+            as_moneyline(&second_game.markets()[&MarketType::Moneyline]),
         ],
     );
     assert_total_group(
         &cluster,
         &total_market_type(2.5),
         vec![
-            as_total(&first_game.markets[&total_market_type(2.5)]),
-            as_total(&second_game.markets[&total_market_type(2.5)]),
+            as_total(&first_game.markets()[&total_market_type(2.5)]),
+            as_total(&second_game.markets()[&total_market_type(2.5)]),
         ],
     );
 }
@@ -190,14 +189,14 @@ fn try_to_add_game_creates_a_group_for_new_market_types() {
     assert_moneyline_group(
         &cluster,
         vec![
-            as_moneyline(&first_game.markets[&MarketType::Moneyline]),
-            as_moneyline(&second_game.markets[&MarketType::Moneyline]),
+            as_moneyline(&first_game.markets()[&MarketType::Moneyline]),
+            as_moneyline(&second_game.markets()[&MarketType::Moneyline]),
         ],
     );
     assert_total_group(
         &cluster,
         &total_market_type(2.5),
-        vec![as_total(&second_game.markets[&total_market_type(2.5)])],
+        vec![as_total(&second_game.markets()[&total_market_type(2.5)])],
     );
 }
 
@@ -221,12 +220,12 @@ fn try_to_add_game_keeps_total_markets_with_different_lines_in_separate_groups()
     assert_total_group(
         &cluster,
         &total_market_type(2.5),
-        vec![as_total(&first_game.markets[&total_market_type(2.5)])],
+        vec![as_total(&first_game.markets()[&total_market_type(2.5)])],
     );
     assert_total_group(
         &cluster,
         &total_market_type(3.0),
-        vec![as_total(&second_game.markets[&total_market_type(3.0)])],
+        vec![as_total(&second_game.markets()[&total_market_type(3.0)])],
     );
 }
 
@@ -264,4 +263,41 @@ fn arbitrage_opportunites_returns_multiple_arbitrage_types_together() {
             .iter()
             .any(|opportunity| matches!(opportunity, Arbitrage::TwoWayLineArbitrage(_)))
     );
+}
+
+#[test]
+fn build_market_group_includes_market_types_added_after_game_is_clustered() {
+    let game = game_with_markets(
+        "Betano",
+        vec![moneyline_market("betano-moneyline", 2.0, 1.8)],
+    );
+
+    let mut cluster = FixtureCluster::new(Arc::clone(&game));
+
+    assert!(cluster.try_to_add_game(game_with_markets(
+        "Betclic",
+        vec![moneyline_market("betclic-moneyline", 2.1, 1.75)],
+    )));
+
+    game.write()
+        .unwrap()
+        .update_market(vec![total_market("betano-total", 2.5, 1.9, 1.9).1]);
+
+    let total_group = cluster
+        .markets
+        .get(&total_market_type(2.5))
+        .and_then(|pointers| cluster.build_market_group(pointers));
+
+    let game = game.read().unwrap();
+
+    match total_group {
+        Some(MarketGroup::Total { markets, .. }) => {
+            assert_eq!(
+                vec![as_total(&game.markets()[&total_market_type(2.5)])],
+                markets
+            )
+        }
+        Some(_) => panic!("expected total market group"),
+        None => panic!("expected clustered game updates to surface new market groups"),
+    }
 }

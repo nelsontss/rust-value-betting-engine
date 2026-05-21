@@ -1,6 +1,10 @@
 use super::Game;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
+use crate::domain::entities::market::{
+    Line, Market, MarketType, MoneylineMarket, Odd, TotalMarket,
+};
+
 const DEFAULT_COUNTRY: &str = "Portugal";
 const DEFAULT_COMPETITION: &str = "Primeira Liga";
 const DEFAULT_PLATFORM: &str = "Betano";
@@ -12,7 +16,8 @@ fn build_game(home_team: &str, away_team: &str, date: NaiveDateTime) -> Game {
         DEFAULT_COUNTRY,
         DEFAULT_COMPETITION,
         date,
-        DEFAULT_COMPETITION,
+        DEFAULT_PLATFORM,
+        vec![],
     )
 }
 
@@ -44,10 +49,43 @@ fn assert_not_same_fixture_with_context(
     right: (&str, &str, &str, &str),
 ) {
     let date = fixture_date(1);
-    let left = Game::new(left.0, left.1, left.2, left.3, date, DEFAULT_PLATFORM);
-    let right = Game::new(right.0, right.1, right.2, right.3, date, DEFAULT_PLATFORM);
+    let left = Game::new(
+        left.0,
+        left.1,
+        left.2,
+        left.3,
+        date,
+        DEFAULT_PLATFORM,
+        vec![],
+    );
+    let right = Game::new(
+        right.0,
+        right.1,
+        right.2,
+        right.3,
+        date,
+        DEFAULT_PLATFORM,
+        vec![],
+    );
 
     assert!(!left.same_fixture_as(&right));
+}
+
+fn moneyline_market(id: &str, home: f64, away: f64) -> Market {
+    Market::Moneyline(MoneylineMarket::new(
+        id,
+        Odd::new(home).unwrap(),
+        Odd::new(away).unwrap(),
+    ))
+}
+
+fn total_market(id: &str, line: f32, over: f64, under: f64) -> Market {
+    Market::Total(TotalMarket::new(
+        id,
+        Line(line),
+        Odd::new(over).unwrap(),
+        Odd::new(under).unwrap(),
+    ))
 }
 
 #[test]
@@ -124,5 +162,74 @@ fn same_fixture_as_rejects_different_teams_with_shared_city_names() {
     assert_not_same_fixture(
         ("Manchester United", "Benfica"),
         ("Manchester City", "Benfica"),
+    );
+}
+
+#[test]
+fn new_indexes_markets_by_derived_market_type() {
+    let game = Game::new(
+        "Benfica",
+        "Sporting",
+        DEFAULT_COUNTRY,
+        DEFAULT_COMPETITION,
+        fixture_date(1),
+        DEFAULT_PLATFORM,
+        vec![
+            moneyline_market("moneyline", 2.0, 1.8),
+            total_market("total", 2.5, 1.9, 1.9),
+        ],
+    );
+
+    assert!(matches!(
+        game.markets().get(&MarketType::Moneyline),
+        Some(Market::Moneyline(_))
+    ));
+    assert!(matches!(
+        game.markets().get(&MarketType::Total { line: 250 }),
+        Some(Market::Total(_))
+    ));
+}
+
+#[test]
+fn update_market_replaces_existing_market_with_same_logical_type() {
+    let mut game = Game::new(
+        "Benfica",
+        "Sporting",
+        DEFAULT_COUNTRY,
+        DEFAULT_COMPETITION,
+        fixture_date(1),
+        DEFAULT_PLATFORM,
+        vec![moneyline_market("opening", 2.0, 1.8)],
+    );
+
+    game.update_market(vec![moneyline_market("updated", 2.2, 1.7)]);
+
+    assert_eq!(1, game.markets().len());
+    assert!(matches!(
+        game.markets().get(&MarketType::Moneyline),
+        Some(Market::Moneyline(MoneylineMarket { home, away, .. }))
+            if *home == Odd::new(2.2).unwrap() && *away == Odd::new(1.7).unwrap()
+    ));
+}
+
+#[test]
+fn update_market_adds_new_market_for_different_logical_type() {
+    let mut game = Game::new(
+        "Benfica",
+        "Sporting",
+        DEFAULT_COUNTRY,
+        DEFAULT_COMPETITION,
+        fixture_date(1),
+        DEFAULT_PLATFORM,
+        vec![moneyline_market("moneyline", 2.0, 1.8)],
+    );
+
+    game.update_market(vec![total_market("total", 2.5, 1.9, 1.9)]);
+
+    assert_eq!(2, game.markets().len());
+    assert!(game.markets().contains_key(&MarketType::Moneyline));
+    assert!(
+        game.markets()
+            .contains_key(&MarketType::Total { line: 250 })
     );
 }

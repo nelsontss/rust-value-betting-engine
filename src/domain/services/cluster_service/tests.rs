@@ -29,6 +29,7 @@ fn game(
         competition,
         fixture_date(hour, min),
         platform,
+        vec![],
     )))
 }
 
@@ -61,6 +62,7 @@ fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: &str) -> Shar
         "Liga Portugal",
         fixture_date(15, 30),
         platform,
+        vec![],
     )))
 }
 
@@ -72,6 +74,7 @@ fn fuzzy_england_game(home_team: &str, away_team: &str, platform: &str) -> Share
         "Premier League",
         fixture_date(15, 30),
         platform,
+        vec![],
     )))
 }
 
@@ -83,6 +86,7 @@ fn porto_benfica(platform: &str) -> SharedGame {
         "Liga Portugal",
         fixture_date(15, 30),
         platform,
+        vec![],
     )))
 }
 
@@ -94,6 +98,7 @@ fn sporting_braga(platform: &str) -> SharedGame {
         "Liga Portugal",
         fixture_date(17, 30),
         platform,
+        vec![],
     )))
 }
 
@@ -105,6 +110,7 @@ fn arsenal_burnley(platform: &str) -> SharedGame {
         "Premier League",
         fixture_date(18, 30),
         platform,
+        vec![],
     )))
 }
 

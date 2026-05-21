@@ -488,6 +488,24 @@ pub enum MarketType {
     AsianHandicap { line: i32 },
 }
 
+impl MarketType {
+    pub fn from(market: &Market) -> MarketType {
+        match market {
+            Market::MatchResult(_) => MarketType::MatchResult,
+            Market::Moneyline(_) => MarketType::Moneyline,
+            Market::Total(market) => MarketType::Total {
+                line: market.line.key(),
+            },
+            Market::AsianHandicap(market) => MarketType::AsianHandicap {
+                line: market.line.key(),
+            },
+            Market::Handicap(market) => MarketType::Handicap {
+                line: market.line.key(),
+            },
+        }
+    }
+}
+
 pub enum MarketGroup {
     MatchResult(Vec<MatchResultMarket>),
     Moneyline(Vec<MoneylineMarket>),

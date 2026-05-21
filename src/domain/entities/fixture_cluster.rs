@@ -68,7 +68,7 @@ impl FixtureCluster {
                 .expect("game lock poisoned while adding to cluster");
             (
                 game_ref.id.clone(),
-                game_ref.markets.keys().cloned().collect::<Vec<_>>(),
+                game_ref.markets().keys().cloned().collect::<Vec<_>>(),
             )
         };
 
@@ -105,7 +105,7 @@ impl FixtureCluster {
                 .read()
                 .expect("game lock poisoned while building market group");
 
-            game.markets.get(&pointer.market_type).cloned()
+            game.markets().get(&pointer.market_type).cloned()
         });
 
         let first_market = markets.next()?;

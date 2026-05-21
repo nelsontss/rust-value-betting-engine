@@ -24,7 +24,7 @@ pub struct Game {
     competition: String,
     platform: String,
     pub date: NaiveDateTime,
-    pub markets: HashMap<MarketType, Market>,
+    markets: HashMap<MarketType, Market>,
 }
 
 struct SimilarityWeights;
@@ -44,6 +44,7 @@ impl Game {
         competition: &str,
         date: NaiveDateTime,
         platform: &str,
+        markets: Vec<Market>,
     ) -> Self {
         Game {
             id: Uuid::new_v4().to_string(),
@@ -53,7 +54,10 @@ impl Game {
             competition: competition.to_string(),
             platform: platform.to_string(),
             date,
-            markets: HashMap::new(),
+            markets: markets
+                .into_iter()
+                .map(|market| (MarketType::from(&market), market))
+                .collect(),
         }
     }
 
@@ -134,6 +138,18 @@ impl Game {
             Self::normalize_name(&self.away_team),
             self.date
         )
+    }
+
+    pub fn update_market(&mut self, markets: Vec<Market>) {
+        markets.into_iter().for_each(|market| {
+            let market_type = MarketType::from(&market);
+
+            self.markets.entry(market_type).insert_entry(market);
+        });
+    }
+
+    pub fn markets(&self) -> &HashMap<MarketType, Market> {
+        &self.markets
     }
 }
 
