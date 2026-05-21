@@ -1,4 +1,5 @@
 mod arbitrage;
+mod fixture_cluster;
 mod game;
 mod market;
 
@@ -7,7 +8,9 @@ pub use arbitrage::MatchResultArbitrage;
 pub use arbitrage::ThreeWayLineArbitrage;
 pub use arbitrage::TwoWayArbitrage;
 pub use arbitrage::TwoWayLineArbitrage;
+pub use fixture_cluster::FixtureCluster;
 pub use game::Game;
+pub use game::SharedGame;
 pub use market::Line;
 pub use market::Market;
 pub use market::MarketGroup;

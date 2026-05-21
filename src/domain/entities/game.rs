@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::LazyLock,
+    sync::{Arc, LazyLock, RwLock},
 };
 
 use chrono::NaiveDateTime;
@@ -12,6 +12,8 @@ use crate::domain::entities::market::{Market, MarketType};
 
 #[cfg(test)]
 mod tests;
+
+pub type SharedGame = Arc<RwLock<Game>>;
 
 #[derive(Debug, Clone)]
 pub struct Game {

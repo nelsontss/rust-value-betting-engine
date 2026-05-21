@@ -236,7 +236,7 @@ fn guaranteed_profit(scenarios: &[(f64, f64)]) -> f64 {
 }
 
 impl MatchResultMarket {
-    pub fn arbitrage_opportunites(markets: &[&MatchResultMarket]) -> Option<Arbitrage> {
+    pub fn arbitrage_opportunites(markets: &Vec<MatchResultMarket>) -> Option<Arbitrage> {
         if markets.is_empty() {
             return None;
         }
@@ -291,7 +291,7 @@ impl MoneylineMarket {
         }
     }
 
-    pub fn arbitrage_opportunites(markets: &[&MoneylineMarket]) -> Option<Arbitrage> {
+    pub fn arbitrage_opportunites(markets: &Vec<MoneylineMarket>) -> Option<Arbitrage> {
         if markets.is_empty() {
             return None;
         }
@@ -339,7 +339,7 @@ impl TotalMarket {
         }
     }
 
-    pub fn arbitrage_opportunites(markets: &[&TotalMarket]) -> Option<Arbitrage> {
+    pub fn arbitrage_opportunites(markets: &Vec<TotalMarket>) -> Option<Arbitrage> {
         let line = markets.first()?.line;
 
         if markets.iter().any(|market| market.line.key() != line.key()) {
@@ -384,7 +384,7 @@ pub struct HandicapMarket {
 }
 
 impl HandicapMarket {
-    pub fn arbitrage_opportunites(markets: &[&HandicapMarket]) -> Option<Arbitrage> {
+    pub fn arbitrage_opportunites(markets: &Vec<HandicapMarket>) -> Option<Arbitrage> {
         let line = markets.first()?.line;
 
         if markets.iter().any(|market| market.line != line) {
@@ -435,7 +435,7 @@ pub struct AsianHandicapMarket {
 }
 
 impl AsianHandicapMarket {
-    pub fn arbitrage_opportunites(markets: &[&AsianHandicapMarket]) -> Option<Arbitrage> {
+    pub fn arbitrage_opportunites(markets: &Vec<AsianHandicapMarket>) -> Option<Arbitrage> {
         let line = markets.first()?.line;
 
         if markets.iter().any(|market| market.line.key() != line.key()) {
@@ -488,25 +488,25 @@ pub enum MarketType {
     AsianHandicap { line: i32 },
 }
 
-pub enum MarketGroup<'a> {
-    MatchResult(Vec<&'a MatchResultMarket>),
-    Moneyline(Vec<&'a MoneylineMarket>),
+pub enum MarketGroup {
+    MatchResult(Vec<MatchResultMarket>),
+    Moneyline(Vec<MoneylineMarket>),
     Total {
         line: i32,
-        markets: Vec<&'a TotalMarket>,
+        markets: Vec<TotalMarket>,
     },
     Handicap {
         line: i32,
-        markets: Vec<&'a HandicapMarket>,
+        markets: Vec<HandicapMarket>,
     },
     AsianHandicap {
         line: i32,
-        markets: Vec<&'a AsianHandicapMarket>,
+        markets: Vec<AsianHandicapMarket>,
     },
 }
 
-impl<'a> MarketGroup<'a> {
-    pub fn from_market(market: &'a Market) -> Self {
+impl MarketGroup {
+    pub fn from_market(market: Market) -> Self {
         match market {
             Market::MatchResult(market) => Self::MatchResult(vec![market]),
             Market::Moneyline(market) => Self::Moneyline(vec![market]),
@@ -535,7 +535,7 @@ impl<'a> MarketGroup<'a> {
         }
     }
 
-    pub fn push_market(&mut self, market: &'a Market) {
+    pub fn push_market(&mut self, market: Market) -> Result<(), MarketGroupError> {
         match (self, market) {
             (MarketGroup::MatchResult(markets), Market::MatchResult(market)) => {
                 markets.push(market)
@@ -556,8 +556,10 @@ impl<'a> MarketGroup<'a> {
             {
                 markets.push(market)
             }
-            _ => panic!("market type and market group do not match"),
+            _ => return Err(MarketGroupError::MarketTypeAndGroupDontMatch),
         }
+
+        Ok(())
     }
 
     pub fn arbitrage(&self) -> Option<Arbitrage> {
@@ -573,4 +575,8 @@ impl<'a> MarketGroup<'a> {
             }
         }
     }
+}
+
+pub enum MarketGroupError {
+    MarketTypeAndGroupDontMatch,
 }

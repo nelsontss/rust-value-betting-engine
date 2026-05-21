@@ -12,19 +12,19 @@ fn market_group_total_arbitrage_accepts_lines_with_same_canonical_key() {
     let first_market = TotalMarket {
         id: "first-total".to_string(),
         line: Line(2.5),
-        over: Odd(2.15),
-        under: Odd(1.75),
+        over: Odd::new(2.15).unwrap(),
+        under: Odd::new(1.75).unwrap(),
     };
     let second_market = TotalMarket {
         id: "second-total".to_string(),
         line: Line(2.5000002),
-        over: Odd(1.8),
-        under: Odd(2.15),
+        over: Odd::new(1.8).unwrap(),
+        under: Odd::new(2.15).unwrap(),
     };
 
     let group = MarketGroup::Total {
         line: 250,
-        markets: vec![&first_market, &second_market],
+        markets: vec![first_market, second_market],
     };
 
     let result = group.arbitrage();
@@ -47,7 +47,7 @@ fn total_market_arbitrage_opportunites_rejects_integer_lines_with_push_state() {
         under: Odd::new(2.2).unwrap(),
     };
 
-    let result = TotalMarket::arbitrage_opportunites(&[&first_market, &second_market]);
+    let result = TotalMarket::arbitrage_opportunites(&vec![first_market, second_market]);
 
     assert_eq!(None, result);
 }
@@ -67,7 +67,7 @@ fn asian_handicap_market_arbitrage_opportunites_handles_quarter_lines() {
         away: Odd::new(2.2).unwrap(),
     };
 
-    let result = AsianHandicapMarket::arbitrage_opportunites(&[&first_market, &second_market]);
+    let result = AsianHandicapMarket::arbitrage_opportunites(&vec![first_market, second_market]);
 
     assert!(matches!(result, Some(Arbitrage::TwoWayLineArbitrage(_))));
 }

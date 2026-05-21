@@ -1,6 +1,10 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use std::sync::{Arc, RwLock};
 
-use crate::domain::{entities::Game, services::cluster_service::ClusterService};
+use crate::domain::{
+    entities::{Game, SharedGame},
+    services::cluster_service::ClusterService,
+};
 
 fn fixture_date(hour: u32, min: u32) -> NaiveDateTime {
     NaiveDateTime::new(
@@ -17,15 +21,15 @@ fn game(
     hour: u32,
     min: u32,
     platform: &str,
-) -> Game {
-    Game::new(
+) -> SharedGame {
+    Arc::new(RwLock::new(Game::new(
         home_team,
         away_team,
         country,
         competition,
         fixture_date(hour, min),
         platform,
-    )
+    )))
 }
 
 fn assert_cluster_sizes(cluster_service: &ClusterService, expected_sizes: &[usize]) {
@@ -49,59 +53,59 @@ fn assert_cluster_sizes(cluster_service: &ClusterService, expected_sizes: &[usiz
     assert_eq!(expected_sizes, cluster_sizes.as_slice());
 }
 
-fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: &str) -> Game {
-    Game::new(
+fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: &str) -> SharedGame {
+    Arc::new(RwLock::new(Game::new(
         home_team,
         away_team,
         "Portugal",
         "Liga Portugal",
         fixture_date(15, 30),
         platform,
-    )
+    )))
 }
 
-fn fuzzy_england_game(home_team: &str, away_team: &str, platform: &str) -> Game {
-    Game::new(
+fn fuzzy_england_game(home_team: &str, away_team: &str, platform: &str) -> SharedGame {
+    Arc::new(RwLock::new(Game::new(
         home_team,
         away_team,
         "England",
         "Premier League",
         fixture_date(15, 30),
         platform,
-    )
+    )))
 }
 
-fn porto_benfica(platform: &str) -> Game {
-    Game::new(
+fn porto_benfica(platform: &str) -> SharedGame {
+    Arc::new(RwLock::new(Game::new(
         "FC Porto",
         "SL Benfica",
         "Portugal",
         "Liga Portugal",
         fixture_date(15, 30),
         platform,
-    )
+    )))
 }
 
-fn sporting_braga(platform: &str) -> Game {
-    Game::new(
+fn sporting_braga(platform: &str) -> SharedGame {
+    Arc::new(RwLock::new(Game::new(
         "Sporting",
         "Braga",
         "Portugal",
         "Liga Portugal",
         fixture_date(17, 30),
         platform,
-    )
+    )))
 }
 
-fn arsenal_burnley(platform: &str) -> Game {
-    Game::new(
+fn arsenal_burnley(platform: &str) -> SharedGame {
+    Arc::new(RwLock::new(Game::new(
         "Arsenal",
         "Burnley",
         "England",
         "Premier League",
         fixture_date(18, 30),
         platform,
-    )
+    )))
 }
 
 #[test]
@@ -116,7 +120,7 @@ fn clusters_games_by_similarity_when_they_are_fully_equal() {
         arsenal_burnley("Betclic"),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -133,7 +137,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_names() {
         fuzzy_england_game("Man United", "Arsenal", "Betclic"),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -197,7 +201,7 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 2]);
 }
@@ -261,7 +265,7 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 2]);
 }
@@ -334,7 +338,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -407,7 +411,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -480,7 +484,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -526,7 +530,7 @@ fn keeps_distinct_fixtures_separate_when_country_competition_and_date_match() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2]);
 }
@@ -563,7 +567,7 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
         ),
     ];
 
-    let cluster_service = ClusterService::new(&games);
+    let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[1, 2]);
 }
