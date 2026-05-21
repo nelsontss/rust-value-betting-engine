@@ -2,3 +2,4 @@ target/
 
 # Coverage outputs
 coverage/
+.github
