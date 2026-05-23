@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, LazyLock, RwLock},
+    sync::LazyLock,
 };
 
 use chrono::NaiveDateTime;
@@ -12,8 +12,6 @@ use crate::domain::entities::market::{Market, MarketType};
 
 #[cfg(test)]
 mod tests;
-
-pub type SharedGame = Arc<RwLock<Game>>;
 
 #[derive(Debug, Clone)]
 pub struct Game {
@@ -140,11 +138,11 @@ impl Game {
         )
     }
 
-    pub fn update_market(&mut self, markets: Vec<Market>) {
+    pub fn update_markets(&mut self, markets: Vec<&Market>) {
         markets.into_iter().for_each(|market| {
             let market_type = MarketType::from(&market);
 
-            self.markets.entry(market_type).insert_entry(market);
+            self.markets.entry(market_type).insert_entry(market.clone());
         });
     }
 

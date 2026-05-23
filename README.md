@@ -1,6 +1,61 @@
 # rust-value-betting-engine
 
-Rust project bootstrapped with Cargo.
+Rust engine for clustering equivalent fixtures across bookmakers, aggregating market data, and detecting arbitrage opportunities.
+
+## Features
+
+- Cross-bookmaker fixture clustering using normalized team, competition, country, and kickoff date data.
+- Fuzzy fixture matching with `deunicode` and `strsim`-based similarity scoring.
+- Domain models for `Game`, `FixtureCluster`, `Market`, `MarketType`, `Line`, and `Odd`.
+- Support for match result, moneyline, total, handicap, and asian handicap market families.
+- Incremental game market updates through `ClusterService::update_games` and `FixtureCluster::update_markets`.
+- Arbitrage detection for two-way, three-way, and line-based markets.
+- Stake distribution, guaranteed payout, guaranteed profit, and ROI calculations on arbitrage results.
+- Unit coverage for fixture clustering, grouped market aggregation, market updates, and service-level update flows.
+
+## Architecture
+
+The project follows a layered, domain-first structure:
+
+```mermaid
+flowchart TB
+    A[Application Layer] --> DS[Domain Services]
+    A --> I[Infrastructure Layer]
+
+    subgraph D[Domain Layer]
+        DS[ClusterService]
+        G[Game]
+        FC[FixtureCluster]
+        MG[MarketGroup]
+        M[Market / MarketType / Odd / Line]
+        ARB[Arbitrage Models]
+
+        DS --> FC
+        DS --> G
+        FC --> G
+        FC --> MG
+        G --> M
+        MG --> M
+        MG --> ARB
+    end
+
+    I --> A
+    SH[Shared Utilities] --> A
+    SH --> D
+    I --> D
+```
+
+- `domain` contains the core betting model and rules. This is where fixture matching, grouped market aggregation, and arbitrage calculation live.
+- `application` is the orchestration layer intended to coordinate use cases and workflows on top of the domain.
+- `infrastructure` is reserved for adapters such as configuration, repositories, bookmaker feeds, persistence, or external APIs.
+- `shared` contains technical cross-cutting helpers used across layers.
+
+Inside the domain, the current design is centered around a few key concepts:
+
+- `Game` owns normalized fixture metadata plus a market map keyed by `MarketType`.
+- `FixtureCluster` groups equivalent games from different platforms and maintains a secondary index from `MarketType` to unique game IDs for grouped-market lookup.
+- `ClusterService` builds and updates clusters incrementally while returning newly discovered arbitrage opportunities.
+- `MarketGroup` and the arbitrage models encapsulate market-family-specific comparison and arbitrage logic.
 
 ## Layout
 
@@ -54,6 +109,8 @@ If you add `src/domain/markets/mod.rs`, update `src/domain/mod.rs` with `pub mod
 ```sh
 cargo run
 cargo test
+cargo test fixture_cluster
+cargo test cluster_service
 cargo fmt
 cargo clippy --all-targets --all-features -- -D warnings
 ```

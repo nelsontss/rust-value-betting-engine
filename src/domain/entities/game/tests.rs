@@ -202,7 +202,7 @@ fn update_market_replaces_existing_market_with_same_logical_type() {
         vec![moneyline_market("opening", 2.0, 1.8)],
     );
 
-    game.update_market(vec![moneyline_market("updated", 2.2, 1.7)]);
+    game.update_markets(vec![&moneyline_market("updated", 2.2, 1.7)]);
 
     assert_eq!(1, game.markets().len());
     assert!(matches!(
@@ -224,7 +224,7 @@ fn update_market_adds_new_market_for_different_logical_type() {
         vec![moneyline_market("moneyline", 2.0, 1.8)],
     );
 
-    game.update_market(vec![total_market("total", 2.5, 1.9, 1.9)]);
+    game.update_markets(vec![&total_market("total", 2.5, 1.9, 1.9)]);
 
     assert_eq!(2, game.markets().len());
     assert!(game.markets().contains_key(&MarketType::Moneyline));

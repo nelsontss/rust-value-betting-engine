@@ -1,8 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-use std::sync::{Arc, RwLock};
 
 use crate::domain::{
-    entities::{Game, SharedGame},
+    entities::{Arbitrage, Game, Line, Market, Odd, TotalMarket},
     services::cluster_service::ClusterService,
 };
 
@@ -21,8 +20,8 @@ fn game(
     hour: u32,
     min: u32,
     platform: &str,
-) -> SharedGame {
-    Arc::new(RwLock::new(Game::new(
+) -> Game {
+    Game::new(
         home_team,
         away_team,
         country,
@@ -30,22 +29,17 @@ fn game(
         fixture_date(hour, min),
         platform,
         vec![],
-    )))
+    )
 }
 
 fn assert_cluster_sizes(cluster_service: &ClusterService, expected_sizes: &[usize]) {
-    let total_clusters: usize = cluster_service
-        .clusters
-        .values()
-        .map(|clusters_on_date| clusters_on_date.len())
-        .sum();
+    let total_clusters: usize = cluster_service.clusters.len();
 
     assert_eq!(expected_sizes.len(), total_clusters);
 
     let mut cluster_sizes: Vec<usize> = cluster_service
         .clusters
         .values()
-        .flat_map(|clusters_on_date| clusters_on_date.iter())
         .map(|cluster| cluster.game_count())
         .collect();
 
@@ -54,8 +48,8 @@ fn assert_cluster_sizes(cluster_service: &ClusterService, expected_sizes: &[usiz
     assert_eq!(expected_sizes, cluster_sizes.as_slice());
 }
 
-fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: &str) -> SharedGame {
-    Arc::new(RwLock::new(Game::new(
+fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: &str) -> Game {
+    Game::new(
         home_team,
         away_team,
         "Portugal",
@@ -63,11 +57,11 @@ fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: &str) -> Shar
         fixture_date(15, 30),
         platform,
         vec![],
-    )))
+    )
 }
 
-fn fuzzy_england_game(home_team: &str, away_team: &str, platform: &str) -> SharedGame {
-    Arc::new(RwLock::new(Game::new(
+fn fuzzy_england_game(home_team: &str, away_team: &str, platform: &str) -> Game {
+    Game::new(
         home_team,
         away_team,
         "England",
@@ -75,11 +69,11 @@ fn fuzzy_england_game(home_team: &str, away_team: &str, platform: &str) -> Share
         fixture_date(15, 30),
         platform,
         vec![],
-    )))
+    )
 }
 
-fn porto_benfica(platform: &str) -> SharedGame {
-    Arc::new(RwLock::new(Game::new(
+fn porto_benfica(platform: &str) -> Game {
+    Game::new(
         "FC Porto",
         "SL Benfica",
         "Portugal",
@@ -87,11 +81,11 @@ fn porto_benfica(platform: &str) -> SharedGame {
         fixture_date(15, 30),
         platform,
         vec![],
-    )))
+    )
 }
 
-fn sporting_braga(platform: &str) -> SharedGame {
-    Arc::new(RwLock::new(Game::new(
+fn sporting_braga(platform: &str) -> Game {
+    Game::new(
         "Sporting",
         "Braga",
         "Portugal",
@@ -99,11 +93,11 @@ fn sporting_braga(platform: &str) -> SharedGame {
         fixture_date(17, 30),
         platform,
         vec![],
-    )))
+    )
 }
 
-fn arsenal_burnley(platform: &str) -> SharedGame {
-    Arc::new(RwLock::new(Game::new(
+fn arsenal_burnley(platform: &str) -> Game {
+    Game::new(
         "Arsenal",
         "Burnley",
         "England",
@@ -111,7 +105,28 @@ fn arsenal_burnley(platform: &str) -> SharedGame {
         fixture_date(18, 30),
         platform,
         vec![],
-    )))
+    )
+}
+
+fn porto_benfica_with_markets(platform: &str, markets: Vec<Market>) -> Game {
+    Game::new(
+        "FC Porto",
+        "SL Benfica",
+        "Portugal",
+        "Liga Portugal",
+        fixture_date(15, 30),
+        platform,
+        markets,
+    )
+}
+
+fn total_market(id: &str, line: f32, over: f64, under: f64) -> Market {
+    Market::Total(TotalMarket::new(
+        id,
+        Line(line),
+        Odd::new(over).unwrap(),
+        Odd::new(under).unwrap(),
+    ))
 }
 
 #[test]
@@ -576,4 +591,75 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
     let cluster_service = ClusterService::new(games);
 
     assert_cluster_sizes(&cluster_service, &[1, 2]);
+}
+
+#[test]
+fn update_games_updates_existing_cluster_and_returns_new_arbitrage() {
+    let first_game = porto_benfica_with_markets(
+        "Betano",
+        vec![total_market("betano-total", 2.5, 2.15, 1.75)],
+    );
+    let second_game = porto_benfica_with_markets("Betclic", vec![]);
+    let second_game_id = second_game.id.clone();
+
+    let mut cluster_service = ClusterService::new(vec![first_game, second_game.clone()]);
+    let mut updated_second_game = second_game;
+
+    updated_second_game.update_markets(vec![&total_market("betclic-total", 2.5, 1.8, 2.15)]);
+
+    let arbitrages = cluster_service.update_games(vec![updated_second_game]);
+
+    assert_eq!(1, arbitrages.len());
+    assert!(matches!(arbitrages[0], Arbitrage::TwoWayLineArbitrage(_)));
+    assert_cluster_sizes(&cluster_service, &[2]);
+    assert!(
+        cluster_service
+            .game_id_to_fixture_cluster_key
+            .contains_key(&second_game_id)
+    );
+}
+
+#[test]
+fn update_games_adds_unknown_game_to_existing_cluster_and_returns_arbitrage() {
+    let first_game = porto_benfica_with_markets(
+        "Betano",
+        vec![total_market("betano-total", 2.5, 2.15, 1.75)],
+    );
+    let new_game = porto_benfica_with_markets(
+        "Betclic",
+        vec![total_market("betclic-total", 2.5, 1.8, 2.15)],
+    );
+    let new_game_id = new_game.id.clone();
+
+    let mut cluster_service = ClusterService::new(vec![first_game]);
+
+    let arbitrages = cluster_service.update_games(vec![new_game]);
+
+    assert_eq!(1, arbitrages.len());
+    assert!(matches!(arbitrages[0], Arbitrage::TwoWayLineArbitrage(_)));
+    assert_cluster_sizes(&cluster_service, &[2]);
+    assert!(
+        cluster_service
+            .game_id_to_fixture_cluster_key
+            .contains_key(&new_game_id)
+    );
+}
+
+#[test]
+fn update_games_creates_new_cluster_for_unknown_distinct_fixture() {
+    let first_game = porto_benfica("Betano");
+    let new_game = sporting_braga("Betclic");
+    let new_game_id = new_game.id.clone();
+
+    let mut cluster_service = ClusterService::new(vec![first_game]);
+
+    let arbitrages = cluster_service.update_games(vec![new_game]);
+
+    assert!(arbitrages.is_empty());
+    assert_cluster_sizes(&cluster_service, &[1, 1]);
+    assert!(
+        cluster_service
+            .game_id_to_fixture_cluster_key
+            .contains_key(&new_game_id)
+    );
 }

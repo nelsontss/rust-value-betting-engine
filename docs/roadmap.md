@@ -67,3 +67,17 @@
    6.4 [X] Update cluster and market tests to the shared-game architecture
 
    6.5 [X] Update `FixtureCluster` and `ClusterService` callers to consume the new `Game` market API
+
+7. [X] Owned game state and incremental cluster updates
+
+   7.1 [X] Replace `SharedGame` usage with owned `Game` values in `FixtureCluster` and `ClusterService`
+
+   7.2 [X] Rework fixture-cluster market indexing to track unique game IDs per `MarketType`
+
+   7.3 [X] Support `FixtureCluster::update_markets` reindexing when a clustered game gains new market types
+
+   7.4 [X] Propagate arbitrage results when `ClusterService::update_games` falls back to `add_games`
+
+   7.5 [X] Add `FixtureCluster` regression tests for duplicate IDs, unknown updates, reindexing, and order-insensitive grouped markets
+
+   7.6 [X] Add `ClusterService` regression tests for `update_games` on known games, unknown matching games, and unknown distinct fixtures

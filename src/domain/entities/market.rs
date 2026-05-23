@@ -283,6 +283,10 @@ pub struct MoneylineMarket {
 }
 
 impl MoneylineMarket {
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
     pub fn new(id: &str, home: Odd, away: Odd) -> Self {
         Self {
             id: id.to_string(),
