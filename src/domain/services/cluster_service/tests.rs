@@ -594,7 +594,7 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
 }
 
 #[test]
-fn update_games_updates_existing_cluster_and_returns_new_arbitrage() {
+fn insert_games_updates_existing_cluster_and_returns_new_arbitrage() {
     let first_game = porto_benfica_with_markets(
         "Betano",
         vec![total_market("betano-total", 2.5, 2.15, 1.75)],
@@ -607,7 +607,7 @@ fn update_games_updates_existing_cluster_and_returns_new_arbitrage() {
 
     updated_second_game.update_markets(vec![&total_market("betclic-total", 2.5, 1.8, 2.15)]);
 
-    let arbitrages = cluster_service.update_games(vec![updated_second_game]);
+    let arbitrages = cluster_service.insert_games(vec![updated_second_game]);
 
     assert_eq!(1, arbitrages.len());
     assert!(matches!(arbitrages[0], Arbitrage::TwoWayLineArbitrage(_)));
@@ -620,7 +620,7 @@ fn update_games_updates_existing_cluster_and_returns_new_arbitrage() {
 }
 
 #[test]
-fn update_games_adds_unknown_game_to_existing_cluster_and_returns_arbitrage() {
+fn insert_games_adds_unknown_game_to_existing_cluster_and_returns_arbitrage() {
     let first_game = porto_benfica_with_markets(
         "Betano",
         vec![total_market("betano-total", 2.5, 2.15, 1.75)],
@@ -633,7 +633,7 @@ fn update_games_adds_unknown_game_to_existing_cluster_and_returns_arbitrage() {
 
     let mut cluster_service = ClusterService::new(vec![first_game]);
 
-    let arbitrages = cluster_service.update_games(vec![new_game]);
+    let arbitrages = cluster_service.insert_games(vec![new_game]);
 
     assert_eq!(1, arbitrages.len());
     assert!(matches!(arbitrages[0], Arbitrage::TwoWayLineArbitrage(_)));
@@ -646,14 +646,14 @@ fn update_games_adds_unknown_game_to_existing_cluster_and_returns_arbitrage() {
 }
 
 #[test]
-fn update_games_creates_new_cluster_for_unknown_distinct_fixture() {
+fn insert_games_creates_new_cluster_for_unknown_distinct_fixture() {
     let first_game = porto_benfica("Betano");
     let new_game = sporting_braga("Betclic");
     let new_game_id = new_game.id.clone();
 
     let mut cluster_service = ClusterService::new(vec![first_game]);
 
-    let arbitrages = cluster_service.update_games(vec![new_game]);
+    let arbitrages = cluster_service.insert_games(vec![new_game]);
 
     assert!(arbitrages.is_empty());
     assert_cluster_sizes(&cluster_service, &[1, 1]);

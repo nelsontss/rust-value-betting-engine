@@ -16,4 +16,5 @@ pub use market::MarketGroup;
 pub use market::MarketType;
 pub use market::MoneylineMarket;
 pub use market::Odd;
+pub use market::OddError;
 pub use market::TotalMarket;

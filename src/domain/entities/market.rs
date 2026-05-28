@@ -236,6 +236,15 @@ fn guaranteed_profit(scenarios: &[(f64, f64)]) -> f64 {
 }
 
 impl MatchResultMarket {
+    pub fn new(id: &str, home: Odd, draw: Odd, away: Odd) -> Self {
+        Self {
+            id: id.to_string(),
+            home,
+            draw,
+            away,
+        }
+    }
+
     pub fn arbitrage_opportunites(markets: &Vec<MatchResultMarket>) -> Option<Arbitrage> {
         if markets.is_empty() {
             return None;
@@ -388,6 +397,16 @@ pub struct HandicapMarket {
 }
 
 impl HandicapMarket {
+    pub fn new(id: &str, line: Line, home: Odd, draw: Odd, away: Odd) -> Self {
+        Self {
+            id: id.to_string(),
+            line,
+            home,
+            draw,
+            away,
+        }
+    }
+
     pub fn arbitrage_opportunites(markets: &Vec<HandicapMarket>) -> Option<Arbitrage> {
         let line = markets.first()?.line;
 
@@ -439,6 +458,15 @@ pub struct AsianHandicapMarket {
 }
 
 impl AsianHandicapMarket {
+    pub fn new(id: &str, line: Line, home: Odd, away: Odd) -> Self {
+        Self {
+            id: id.to_string(),
+            line,
+            home,
+            away,
+        }
+    }
+
     pub fn arbitrage_opportunites(markets: &Vec<AsianHandicapMarket>) -> Option<Arbitrage> {
         let line = markets.first()?.line;
 
@@ -481,6 +509,59 @@ pub enum Market {
     Total(TotalMarket),
     Handicap(HandicapMarket),
     AsianHandicap(AsianHandicapMarket),
+}
+
+impl Market {
+    pub fn match_result(id: &str, home: f64, draw: f64, away: f64) -> Result<Self, OddError> {
+        Ok(Self::MatchResult(MatchResultMarket::new(
+            id,
+            Odd::new(home)?,
+            Odd::new(draw)?,
+            Odd::new(away)?,
+        )))
+    }
+
+    pub fn moneyline(id: &str, home: f64, away: f64) -> Result<Self, OddError> {
+        Ok(Self::Moneyline(MoneylineMarket::new(
+            id,
+            Odd::new(home)?,
+            Odd::new(away)?,
+        )))
+    }
+
+    pub fn total(id: &str, line: f32, over: f64, under: f64) -> Result<Self, OddError> {
+        Ok(Self::Total(TotalMarket::new(
+            id,
+            Line(line),
+            Odd::new(over)?,
+            Odd::new(under)?,
+        )))
+    }
+
+    pub fn handicap(
+        id: &str,
+        line: f32,
+        home: f64,
+        draw: f64,
+        away: f64,
+    ) -> Result<Self, OddError> {
+        Ok(Self::Handicap(HandicapMarket::new(
+            id,
+            Line(line),
+            Odd::new(home)?,
+            Odd::new(draw)?,
+            Odd::new(away)?,
+        )))
+    }
+
+    pub fn asian_handicap(id: &str, line: f32, home: f64, away: f64) -> Result<Self, OddError> {
+        Ok(Self::AsianHandicap(AsianHandicapMarket::new(
+            id,
+            Line(line),
+            Odd::new(home)?,
+            Odd::new(away)?,
+        )))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

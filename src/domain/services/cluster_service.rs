@@ -25,6 +25,10 @@ impl ClusterService {
     pub fn add_games(&mut self, games: Vec<Game>) -> Vec<Arbitrage> {
         let mut arbitrages = Vec::new();
         for game in games {
+            if self.game_id_to_fixture_cluster_key.contains_key(&game.id) {
+                continue;
+            }
+
             let mut found = false;
             let game_id = game.id.clone();
             let mut pending_game = Some(game);
@@ -57,7 +61,7 @@ impl ClusterService {
         arbitrages
     }
 
-    pub fn update_games(&mut self, games: Vec<Game>) -> Vec<Arbitrage> {
+    pub fn insert_games(&mut self, games: Vec<Game>) -> Vec<Arbitrage> {
         let mut arbitrages = Vec::new();
 
         games.into_iter().for_each(|game| {
