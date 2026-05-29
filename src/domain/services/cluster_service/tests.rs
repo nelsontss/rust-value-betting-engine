@@ -33,13 +33,18 @@ fn game(
 }
 
 fn assert_cluster_sizes(cluster_service: &ClusterService, expected_sizes: &[usize]) {
-    let total_clusters: usize = cluster_service.clusters.len();
+    let total_clusters: usize = cluster_service
+        .clusters
+        .values()
+        .flat_map(|clusters_by_key| clusters_by_key.values())
+        .count();
 
     assert_eq!(expected_sizes.len(), total_clusters);
 
     let mut cluster_sizes: Vec<usize> = cluster_service
         .clusters
         .values()
+        .flat_map(|clusters_by_key| clusters_by_key.values())
         .map(|cluster| cluster.game_count())
         .collect();
 
