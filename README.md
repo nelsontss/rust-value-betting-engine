@@ -8,10 +8,11 @@ Rust engine for clustering equivalent fixtures across bookmakers, aggregating ma
 - Fuzzy fixture matching with `deunicode` and `strsim`-based similarity scoring.
 - Domain models for `Game`, `FixtureCluster`, `Market`, `MarketType`, `Line`, and `Odd`.
 - Support for match result, moneyline, total, handicap, and asian handicap market families.
-- Incremental game market updates through `ClusterService::update_games` and `FixtureCluster::update_markets`.
+- Incremental game market updates through `ClusterService::update_markets` and `FixtureCluster::update_markets`.
 - Arbitrage detection for two-way, three-way, and line-based markets.
 - Stake distribution, guaranteed payout, guaranteed profit, and ROI calculations on arbitrage results.
 - Unit coverage for fixture clustering, grouped market aggregation, market updates, and service-level update flows.
+- **Benchmark suite** (AI-generated, see note below) measuring throughput, latency, CPU, and response time across various load profiles.
 
 ## Architecture
 
@@ -54,13 +55,15 @@ Inside the domain, the current design is centered around a few key concepts:
 
 - `Game` owns normalized fixture metadata plus a market map keyed by `MarketType`.
 - `FixtureCluster` groups equivalent games from different platforms and maintains a secondary index from `MarketType` to unique game IDs for grouped-market lookup.
-- `ClusterService` builds and updates clusters incrementally while returning newly discovered arbitrage opportunities.
+- `ClusterService` builds and updates clusters incrementally while returning newly discovered arbitrage opportunities. Clusters are partitioned by **kickoff date** (`NaiveDateTime`) to narrow similarity search and avoid scanning irrelevant clusters.
 - `MarketGroup` and the arbitrage models encapsulate market-family-specific comparison and arbitrage logic.
 
 ## Layout
 
 ```text
 ├── Cargo.toml (project manifest: package metadata, dependencies, features, and cargo settings)
+├── benches (Criterion.rs benchmarks, AI-generated)
+│   └── benchmarks.rs
 ├── src (all application source code)
 │   ├── lib.rs (library entry point: expose modules and public API)
 │   ├── main.rs (binary entry point: keep startup thin and call into lib.rs)
@@ -68,6 +71,9 @@ Inside the domain, the current design is centered around a few key concepts:
 │   │   ├── mod.rs (register application submodules)
 │   │   └── services (application services: coordinate workflows and integrations)
 │   │      └── mod.rs (register application service modules)
+│   ├── benchmark (benchmark data generators, AI-generated)
+│   │   ├── mod.rs
+│   │   └── data.rs
 │   ├── domain (core business logic and rules)
 │   │   ├── mod.rs (register domain submodules)
 │   │   ├── entities (stateful business objects like fixtures, markets, selections)
@@ -88,6 +94,29 @@ Inside the domain, the current design is centered around a few key concepts:
 └── tests (integration and behavior-level tests)
     └── smoke_test.rs (example integration test against the public API)
 ```
+
+## Benchmarks
+
+The benchmark suite in `benches/benchmarks.rs` and the data generators in `src/benchmark/data.rs` are **AI-generated**. They were produced by an LLM based on the project's architecture and are provided as a starting point for performance measurement.
+
+The suite uses [Criterion.rs](https://github.com/bheisler/criterion.rs) and covers:
+
+| Group | What it measures |
+|-------|-----------------|
+| `throughput` | Games inserted per second (new clusters, existing clusters, insert+update) |
+| `latency` | Arbitrage detection latency under no load, steady load, bursts, stale updates, and capacity curves |
+| `cpu_mem` | Per-game insert cost into growing clusters, and ClusterService initialization throughput |
+| `response` | Raw operation times for similarity scoring, cluster arbitrage scans, market group arbitration, and fixture matching |
+
+Run with:
+
+```sh
+cargo bench --bench benchmarks
+```
+
+Results are written to `target/criterion/` and include Criterion HTML reports and a structured analysis.
+
+> **Note:** These benchmarks were reviewed and adjusted for correctness but should be validated against real workload patterns before making performance-critical decisions.
 
 ## Adding Code
 
@@ -111,6 +140,7 @@ cargo run
 cargo test
 cargo test fixture_cluster
 cargo test cluster_service
+cargo bench --bench benchmarks
 cargo fmt
 cargo clippy --all-targets --all-features -- -D warnings
 ```

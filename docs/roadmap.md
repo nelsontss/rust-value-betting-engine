@@ -80,4 +80,34 @@
 
    7.5 [X] Add `FixtureCluster` regression tests for duplicate IDs, unknown updates, reindexing, and order-insensitive grouped markets
 
-   7.6 [X] Add `ClusterService` regression tests for `update_games` on known games, unknown matching games, and unknown distinct fixtures
+    7.6 [X] Add `ClusterService` regression tests for `update_games` on known games, unknown matching games, and unknown distinct fixtures
+
+8. [X] Date-partitioned cluster storage
+
+    8.1 [X] Refactor `ClusterService::clusters` from flat `HashMap<String, FixtureCluster>` to `HashMap<NaiveDateTime, HashMap<String, FixtureCluster>>` for date-scoped lookup
+
+    8.2 [X] Add `cluster_id_to_date` reverse-lookup map to support `update_markets` and `insert_games` across the nested structure
+
+    8.3 [X] Add `ClusterService::update_markets` for batch market updates via game IDs
+
+    8.4 [X] Fix `and_modify` no-op bug on vacant entries by switching to `or_insert_with(HashMap::new)` in the cluster creation path
+
+    8.5 [X] Fix test `assert_cluster_sizes` to flatten the nested HashMap when computing cluster counts and sizes
+
+9. [ ] Performance benchmarks
+
+    9.1 [X] Add Criterion.rs dev-dependency and benchmark harness configuration
+
+    9.2 [X] Implement benchmark data generators (`src/benchmark/data.rs`) for distinct fixtures, clusters, arbitrage scenarios, and market-variant games
+
+    9.3 [X] Implement throughput benchmarks for `add_games` and `insert_games` across varying counts and platform densities
+
+    9.4 [X] Implement latency benchmarks for arbitrage detection under no load, steady load, bursts, stale updates, and capacity curves
+
+    9.5 [X] Implement CPU/memory benchmarks for per-game insert cost and service initialization throughput
+
+    9.6 [X] Implement response-time benchmarks for similarity scoring, cluster arbitrage scans, market-group arbitration, and fixture matching
+
+    9.7 [ ] Establish baseline performance targets and regression alerting
+
+    9.8 [ ] Validate benchmarks against realistic production-like data shapes
