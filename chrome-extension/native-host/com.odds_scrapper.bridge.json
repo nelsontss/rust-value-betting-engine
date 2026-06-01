@@ -1,0 +1,7 @@
+{
+  "name": "com.odds_scrapper.bridge",
+  "description": "Bridge between Odds Scraper extension and Rust engine",
+  "path": "/Users/nelsonsousa/rust-value-betting-engine/target/debug/bridge",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://ipggkknclbppnlahbefeolclfaaidjcd/"]
+}

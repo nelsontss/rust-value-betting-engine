@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Odds Scraper",
+  "version": "0.1.0",
+  "description": "Multi-platform odds scraper. Collects pre-match odds from betting sites and sends them to a local processing server.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "https://www.betano.pt/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Odds Scraper"
+  },
+  "web_accessible_resources": [{
+    "resources": ["platforms/betano/main-world.js"],
+    "matches": ["https://www.betano.pt/*"]
+  }],
+  "icons": {
+    "128": "icons/icon.png"
+  }
+}

@@ -108,6 +108,34 @@
 
     9.6 [X] Implement response-time benchmarks for similarity scoring, cluster arbitrage scans, market-group arbitration, and fixture matching
 
-    9.7 [ ] Establish baseline performance targets and regression alerting
+     9.7 [ ] Establish baseline performance targets and regression alerting
 
-    9.8 [ ] Validate benchmarks against realistic production-like data shapes
+     9.8 [ ] Validate benchmarks against realistic production-like data shapes
+
+10. [X] Chrome extension data ingestion
+
+    10.1 [X] Create Chrome extension with native messaging support
+
+    10.2 [X] Implement Betano API polling service in background service worker
+
+    10.3 [X] Add Unix socket bridge for extension-to-engine communication
+
+    10.4 [X] Implement length-prefixed message framing over stdin/stdout
+
+    10.5 [X] Add upcoming games API polling alongside today's games
+
+    10.6 [X] Log file rotation with configurable line cap in bridge binary
+
+11. [X] Domain type improvements
+
+    11.1 [X] Move `Platform` enum to domain entities layer
+
+    11.2 [X] Replace `String` platform field on `Game` with typed `Platform` enum
+
+    11.3 [X] Add serde support for `Platform` serialization/deserialization
+
+12. [ ] Connector resilience and extensibility
+
+    12.1 [ ] Auto-reconnect loop for bridge socket disconnections
+
+    12.2 [ ] Plugin-style `DataParser` registry for multi-platform support without modifying `BridgeConnector`
