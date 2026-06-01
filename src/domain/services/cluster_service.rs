@@ -2,10 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use chrono::NaiveDateTime;
 
-use crate::domain::{
-    Market,
-    entities::{Arbitrage, FixtureCluster, Game},
-};
+use crate::domain::entities::{Arbitrage, FixtureCluster, Game};
 
 #[cfg(test)]
 mod tests;
@@ -17,19 +14,15 @@ pub struct ClusterService {
 }
 
 impl ClusterService {
-    pub fn new(games: Vec<Game>) -> Self {
-        let mut cluster = ClusterService {
+    pub fn new() -> Self {
+        ClusterService {
             clusters: HashMap::new(),
             game_id_to_fixture_cluster_key: HashMap::new(),
             cluster_id_to_date: HashMap::new(),
-        };
-
-        cluster.add_games(games);
-
-        cluster
+        }
     }
 
-    pub fn add_games(&mut self, games: Vec<Game>) -> Vec<Arbitrage> {
+    fn add_games(&mut self, games: Vec<Game>) -> Vec<Arbitrage> {
         let mut arbitrages = Vec::new();
         for game in games {
             if self.game_id_to_fixture_cluster_key.contains_key(&game.id) {
@@ -77,44 +70,6 @@ impl ClusterService {
                     .insert_entry(game_date);
             }
         }
-
-        arbitrages
-    }
-
-    pub fn update_markets(
-        &mut self,
-        game_ids_to_markets: Vec<(String, Vec<Market>)>,
-    ) -> Vec<Arbitrage> {
-        let mut arbitrages = Vec::new();
-
-        game_ids_to_markets
-            .into_iter()
-            .for_each(|(game_id, markets)| {
-                let game_markets: Vec<&Market> = markets.iter().map(|m| m).collect();
-
-                if let Some(cluster_id) = self.game_id_to_fixture_cluster_key.get(&game_id) {
-                    if let Some(&game_date) = self.cluster_id_to_date.get(cluster_id) {
-                        self.clusters.entry(game_date).and_modify(|clusters_by_id| {
-                            clusters_by_id
-                                .entry(cluster_id.clone())
-                                .and_modify(|cluster| {
-                                    cluster.update_markets(game_id, game_markets)
-                                });
-                        });
-                        arbitrages.append(
-                            &mut self
-                                .clusters
-                                .get(&game_date)
-                                .unwrap()
-                                .get(cluster_id)
-                                .unwrap()
-                                .arbitrage_opportunites(),
-                        );
-                    } else {
-                        println!("[update_markets] game_id not in any cluster")
-                    }
-                }
-            });
 
         arbitrages
     }

@@ -9,6 +9,7 @@ use strsim;
 use uuid::Uuid;
 
 use crate::domain::entities::market::{Market, MarketType};
+use crate::domain::entities::Platform;
 
 #[cfg(test)]
 mod tests;
@@ -20,7 +21,7 @@ pub struct Game {
     away_team: String,
     country: String,
     competition: String,
-    platform: String,
+    platform: Platform,
     pub date: NaiveDateTime,
     markets: HashMap<MarketType, Market>,
 }
@@ -35,13 +36,38 @@ impl SimilarityWeights {
 }
 
 impl Game {
+    pub fn new_with_id(
+        id: &str,
+        home_team: &str,
+        away_team: &str,
+        country: &str,
+        competition: &str,
+        date: NaiveDateTime,
+        platform: Platform,
+        markets: Vec<Market>,
+    ) -> Self {
+        let mut game = Game::new(
+            home_team,
+            away_team,
+            country,
+            competition,
+            date,
+            platform,
+            markets,
+        );
+
+        game.id = id.to_string();
+
+        game
+    }
+
     pub fn new(
         home_team: &str,
         away_team: &str,
         country: &str,
         competition: &str,
         date: NaiveDateTime,
-        platform: &str,
+        platform: Platform,
         markets: Vec<Market>,
     ) -> Self {
         Game {
@@ -50,7 +76,7 @@ impl Game {
             away_team: away_team.to_string(),
             country: country.to_string(),
             competition: competition.to_string(),
-            platform: platform.to_string(),
+            platform,
             date,
             markets: markets
                 .into_iter()

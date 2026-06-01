@@ -2,7 +2,7 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::domain::entities::{
     Arbitrage, FixtureCluster, Game, Line, Market, MarketGroup, MarketType, MoneylineMarket, Odd,
-    TotalMarket,
+    Platform, TotalMarket,
 };
 
 fn fixture_date(hour: u32, min: u32) -> NaiveDateTime {
@@ -12,7 +12,7 @@ fn fixture_date(hour: u32, min: u32) -> NaiveDateTime {
     )
 }
 
-fn game_with_markets(platform: &str, markets: Vec<(MarketType, Market)>) -> Game {
+fn game_with_markets(platform: Platform, markets: Vec<(MarketType, Market)>) -> Game {
     Game::new(
         "FC Porto",
         "SL Benfica",
@@ -117,7 +117,7 @@ fn assert_total_group(
 #[test]
 fn new_groups_initial_game_markets_by_type() {
     let game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![
             moneyline_market("betano-moneyline", 2.0, 1.8),
             total_market("betano-total", 2.5, 1.9, 1.9),
@@ -141,14 +141,14 @@ fn new_groups_initial_game_markets_by_type() {
 #[test]
 fn try_to_add_game_appends_markets_to_existing_groups() {
     let first_game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![
             moneyline_market("betano-moneyline", 2.0, 1.8),
             total_market("betano-total", 2.5, 1.9, 1.9),
         ],
     );
     let second_game = game_with_markets(
-        "Betclic",
+        Platform::Betano,
         vec![
             moneyline_market("betclic-moneyline", 2.1, 1.75),
             total_market("betclic-total", 2.5, 2.0, 1.85),
@@ -180,11 +180,11 @@ fn try_to_add_game_appends_markets_to_existing_groups() {
 #[test]
 fn try_to_add_game_creates_a_group_for_new_market_types() {
     let first_game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![moneyline_market("betano-moneyline", 2.0, 1.8)],
     );
     let second_game = game_with_markets(
-        "Betclic",
+        Platform::Betano,
         vec![
             moneyline_market("betclic-moneyline", 2.1, 1.75),
             total_market("betclic-total", 2.5, 2.0, 1.85),
@@ -212,9 +212,12 @@ fn try_to_add_game_creates_a_group_for_new_market_types() {
 
 #[test]
 fn try_to_add_game_keeps_total_markets_with_different_lines_in_separate_groups() {
-    let first_game = game_with_markets("Betano", vec![total_market("betano-total", 2.5, 1.9, 1.9)]);
+    let first_game = game_with_markets(
+        Platform::Betano,
+        vec![total_market("betano-total", 2.5, 1.9, 1.9)],
+    );
     let second_game = game_with_markets(
-        "Betclic",
+        Platform::Betano,
         vec![total_market("betclic-total", 3.0, 2.0, 1.85)],
     );
 
@@ -239,14 +242,14 @@ fn try_to_add_game_keeps_total_markets_with_different_lines_in_separate_groups()
 #[test]
 fn arbitrage_opportunites_returns_multiple_arbitrage_types_together() {
     let first_game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![
             moneyline_market("betano-moneyline", 2.2, 1.7),
             total_market("betano-total", 2.5, 2.15, 1.75),
         ],
     );
     let second_game = game_with_markets(
-        "Betclic",
+        Platform::Betano,
         vec![
             moneyline_market("betclic-moneyline", 1.8, 2.2),
             total_market("betclic-total", 2.5, 1.8, 2.15),
@@ -275,7 +278,7 @@ fn arbitrage_opportunites_returns_multiple_arbitrage_types_together() {
 #[test]
 fn build_market_group_includes_market_types_added_after_game_is_clustered() {
     let game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![moneyline_market("betano-moneyline", 2.0, 1.8)],
     );
     let game_id = game.id.clone();
@@ -286,7 +289,7 @@ fn build_market_group_includes_market_types_added_after_game_is_clustered() {
     assert!(
         cluster
             .try_to_add_game(game_with_markets(
-                "Betclic",
+                Platform::Betano,
                 vec![moneyline_market("betclic-moneyline", 2.1, 1.75)],
             ))
             .is_ok()
@@ -304,7 +307,7 @@ fn build_market_group_includes_market_types_added_after_game_is_clustered() {
 #[test]
 fn try_to_add_game_returns_err_and_keeps_cluster_unchanged_for_different_fixture() {
     let first_game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![moneyline_market("betano-moneyline", 2.0, 1.8)],
     );
     let different_game = Game::new(
@@ -313,7 +316,7 @@ fn try_to_add_game_returns_err_and_keeps_cluster_unchanged_for_different_fixture
         "Portugal",
         "Liga Portugal",
         fixture_date(15, 30),
-        "Betclic",
+        Platform::Betano,
         vec![moneyline_market("betclic-moneyline", 2.1, 1.75).1],
     );
     let different_game_id = different_game.id.clone();
@@ -333,7 +336,7 @@ fn try_to_add_game_returns_err_and_keeps_cluster_unchanged_for_different_fixture
 #[test]
 fn try_to_add_game_does_not_duplicate_existing_game_id() {
     let game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![moneyline_market("betano-moneyline", 2.0, 1.8)],
     );
 
@@ -358,7 +361,7 @@ fn try_to_add_game_does_not_duplicate_existing_game_id() {
 #[test]
 fn update_markets_ignores_unknown_game_id() {
     let game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![moneyline_market("betano-moneyline", 2.0, 1.8)],
     );
     let added_total_market = total_market("betano-total", 2.5, 1.9, 1.9).1;
@@ -383,7 +386,7 @@ fn update_markets_ignores_unknown_game_id() {
 #[test]
 fn update_markets_does_not_duplicate_game_ids_for_existing_market_type() {
     let game = game_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![moneyline_market("betano-moneyline", 2.0, 1.8)],
     );
     let game_id = game.id.clone();

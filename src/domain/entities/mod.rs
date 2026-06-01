@@ -2,6 +2,7 @@ mod arbitrage;
 mod fixture_cluster;
 mod game;
 mod market;
+mod platform;
 
 pub use arbitrage::Arbitrage;
 pub use arbitrage::MatchResultArbitrage;
@@ -18,3 +19,4 @@ pub use market::MoneylineMarket;
 pub use market::Odd;
 pub use market::OddError;
 pub use market::TotalMarket;
+pub use platform::Platform;

@@ -1,6 +1,6 @@
 # rust-value-betting-engine
 
-Rust engine for clustering equivalent fixtures across bookmakers, aggregating market data, and detecting arbitrage opportunities.
+Rust engine for clustering equivalent fixtures across bookmakers, aggregating market data, detecting arbitrage opportunities, and ingesting live odds via Chrome extension.
 
 ## Features
 
@@ -13,6 +13,9 @@ Rust engine for clustering equivalent fixtures across bookmakers, aggregating ma
 - Stake distribution, guaranteed payout, guaranteed profit, and ROI calculations on arbitrage results.
 - Unit coverage for fixture clustering, grouped market aggregation, market updates, and service-level update flows.
 - **Benchmark suite** (AI-generated, see note below) measuring throughput, latency, CPU, and response time across various load profiles.
+- **Chrome extension** with background service worker polling bookmaker APIs and forwarding data via native messaging.
+- **Unix socket bridge** (`bridge` binary) for extension-to-engine communication with length-prefixed message framing.
+- **Platform parser** system for converting raw API JSON into domain `Game` objects.
 
 ## Architecture
 
@@ -64,9 +67,17 @@ Inside the domain, the current design is centered around a few key concepts:
 ├── Cargo.toml (project manifest: package metadata, dependencies, features, and cargo settings)
 ├── benches (Criterion.rs benchmarks, AI-generated)
 │   └── benchmarks.rs
+├── chrome-extension (Chrome extension for bookmaker API polling)
+│   ├── background.js (service worker: fetch APIs, send to native host)
+│   ├── manifest.json
+│   ├── platforms/
+│   ├── popup/
+│   └── native-host/
 ├── src (all application source code)
 │   ├── lib.rs (library entry point: expose modules and public API)
 │   ├── main.rs (binary entry point: keep startup thin and call into lib.rs)
+│   ├── bin (additional binaries)
+│   │   └── bridge.rs (Unix socket bridge between extension and engine)
 │   ├── application (application layer: orchestration of business flows)
 │   │   ├── mod.rs (register application submodules)
 │   │   └── services (application services: coordinate workflows and integrations)
@@ -77,7 +88,12 @@ Inside the domain, the current design is centered around a few key concepts:
 │   ├── domain (core business logic and rules)
 │   │   ├── mod.rs (register domain submodules)
 │   │   ├── entities (stateful business objects like fixtures, markets, selections)
-│   │   │   └── mod.rs (register entity modules)
+│   │   │   ├── mod.rs (register entity modules)
+│   │   │   ├── game.rs
+│   │   │   ├── market.rs
+│   │   │   ├── fixture_cluster.rs
+│   │   │   ├── arbitrage.rs
+│   │   │   └── platform.rs
 │   │   ├── services (pure domain rules that do not belong to one entity)
 │   │   │   └── mod.rs (register domain service modules)
 │   │   └── value_objects (small immutable business types like odds or probabilities)
@@ -86,13 +102,38 @@ Inside the domain, the current design is centered around a few key concepts:
 │   │   ├── mod.rs (register infrastructure submodules)
 │   │   ├── config (configuration loading and startup settings)
 │   │   │   └── mod.rs (register config modules)
-│   │   └── repositories (database, file, API, or bookmaker adapter implementations)
-│   │       └── mod.rs (register repository modules)
+│   │   ├── bridge (BridgeMessage types and serialization)
+│   │   │   ├── mod.rs
+│   │   │   └── types.rs
+│   │   └── connectors (bookmaker data parsers and bridge connector)
+│   │       ├── mod.rs
+│   │       ├── bridge_connector.rs (Unix socket client, receives messages)
+│   │       └── betano_connector.rs (Betano API JSON → Vec<Game> parser)
 │   └── shared (cross-cutting technical utilities shared across layers)
 │       ├── error.rs (shared error and result types)
 │       └── mod.rs (register shared modules)
 └── tests (integration and behavior-level tests)
     └── smoke_test.rs (example integration test against the public API)
+```
+
+## Data ingestion flow
+
+```
+Chrome extension background.js
+  │  setInterval → fetch Betano API → parse → sendToNative
+  ▼
+Native messaging host (stdin/stdout)
+  │  length-prefixed JSON frames
+  ▼
+bridge binary (src/bin/bridge.rs)
+  │  UnixListener → accept → forward messages
+  ▼
+BridgeConnector (src/infrastructure/connectors/)
+  │  reads from Unix socket → deserializes BridgeMessage
+  ▼
+BetanoParser → Vec<Game>
+  ▼
+ClusterService → arbitrage detection
 ```
 
 ## Benchmarks

@@ -1,13 +1,21 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::domain::{
-    entities::{Game, Market},
+    entities::{Game, Market, Platform},
     services::ClusterService,
 };
 
-const PLATFORMS: &[&str] = &[
-    "Betano", "Betclic", "22Bet", "Sportingbet", "Bwin", "Moosh", "Solverde",
-    "Luckia", "Esc Online", "Placard",
+const PLATFORMS: &[Platform] = &[
+    Platform::Betano,
+    Platform::Betano,
+    Platform::Betano,
+    Platform::Betano,
+    Platform::Betano,
+    Platform::Betano,
+    Platform::Betano,
+    Platform::Betano,
+    Platform::Betano,
+    Platform::Betano,
 ];
 
 const TEAMS: &[&str] = &[
@@ -86,7 +94,10 @@ const COMPETITIONS: &[&str] = &[
 fn fixture_date(day_offset: u32, hour: u32, min: u32) -> NaiveDateTime {
     let base = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
     let date = base + chrono::Duration::days(day_offset as i64);
-    NaiveDateTime::new(date, NaiveTime::from_hms_milli_opt(hour.min(23), min, 0, 0).unwrap())
+    NaiveDateTime::new(
+        date,
+        NaiveTime::from_hms_milli_opt(hour.min(23), min, 0, 0).unwrap(),
+    )
 }
 
 /// Generate `count` games that are all distinct fixtures (different teams, countries,
@@ -247,10 +258,7 @@ pub fn generate_arbitrage_games(
 }
 
 /// Generate games that cover all 5 market types.
-pub fn generate_all_market_types(
-    platform: &str,
-    game_label: &str,
-) -> Game {
+pub fn generate_all_market_types(platform: Platform, game_label: &str) -> Game {
     let markets = vec![
         Market::match_result(&format!("{}-mr", game_label), 2.5, 3.2, 2.8).unwrap(),
         Market::moneyline(&format!("{}-ml", game_label), 1.8, 2.0).unwrap(),
@@ -273,7 +281,11 @@ pub fn generate_all_market_types(
 /// Build a ClusterService pre-loaded with `game_count` distinct fixtures.
 pub fn build_loaded_service(game_count: usize) -> ClusterService {
     let games = generate_distinct_fixtures(game_count);
-    ClusterService::new(games)
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.insert_games(games);
+
+    cluster_service
 }
 
 /// Build a ClusterService pre-loaded with `cluster_count` clusters,
@@ -283,5 +295,9 @@ pub fn build_loaded_service_with_clusters(
     platforms_per_cluster: usize,
 ) -> ClusterService {
     let games = generate_many_clusters(cluster_count, platforms_per_cluster, true);
-    ClusterService::new(games)
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.insert_games(games);
+
+    cluster_service
 }

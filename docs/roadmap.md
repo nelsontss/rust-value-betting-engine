@@ -134,8 +134,38 @@
 
     11.3 [X] Add serde support for `Platform` serialization/deserialization
 
-12. [ ] Connector resilience and extensibility
+12. [X] Bridge infrastructure
 
-    12.1 [ ] Auto-reconnect loop for bridge socket disconnections
+    12.1 [X] Define `BridgeMessage` tagged enum for socket communication
 
-    12.2 [ ] Plugin-style `DataParser` registry for multi-platform support without modifying `BridgeConnector`
+    12.2 [X] Implement `BridgeConnector` as Unix stream client
+
+    12.3 [X] Implement `BetanoParser` for converting Betano API JSON to domain models
+
+    12.4 [X] Wire `BookmakerScrapperService` with connector and cluster service
+
+13. [X] BetanoParser typeId corrections
+
+    13.1 [X] Remove incorrect typeId=9 → AsianHandicap mapping (typeId=9 is Double Chance)
+
+    13.2 [X] Map typeId=10 (Draw No Bet) to Moneyline
+
+    13.3 [X] Map typeId=14 (Over/Under 1st Half) to Total market
+
+    13.4 [X] Map typeId=15 (Both Teams to Score) to Moneyline
+
+14. [X] Connector resilience and extensibility
+
+    14.1 [ ] Auto-reconnect loop for bridge socket disconnections
+
+    14.2 [X] Plugin-style `DataParser` registry for multi-platform support without modifying `BridgeConnector`
+
+15. [ ] Double Chance market type
+
+    15.1 [ ] Add `DoubleChanceMarket` struct with 3 selections (1X, 12, X2)
+
+    15.2 [ ] Add `DoubleChance` variant to `Market` enum and `MarketGroup`
+
+    15.3 [ ] Implement `arbitrage_opportunites` for double chance markets
+
+    15.4 [ ] Re-enable typeId=9 parsing in `BetanoParser` mapped to `Market::DoubleChance`

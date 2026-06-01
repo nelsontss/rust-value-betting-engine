@@ -1,6 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::domain::{
+    Platform,
     entities::{Arbitrage, Game, Line, Market, Odd, TotalMarket},
     services::cluster_service::ClusterService,
 };
@@ -19,7 +20,7 @@ fn game(
     competition: &str,
     hour: u32,
     min: u32,
-    platform: &str,
+    platform: Platform,
 ) -> Game {
     Game::new(
         home_team,
@@ -53,7 +54,7 @@ fn assert_cluster_sizes(cluster_service: &ClusterService, expected_sizes: &[usiz
     assert_eq!(expected_sizes, cluster_sizes.as_slice());
 }
 
-fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: &str) -> Game {
+fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: Platform) -> Game {
     Game::new(
         home_team,
         away_team,
@@ -65,7 +66,7 @@ fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: &str) -> Game
     )
 }
 
-fn fuzzy_england_game(home_team: &str, away_team: &str, platform: &str) -> Game {
+fn fuzzy_england_game(home_team: &str, away_team: &str, platform: Platform) -> Game {
     Game::new(
         home_team,
         away_team,
@@ -77,7 +78,7 @@ fn fuzzy_england_game(home_team: &str, away_team: &str, platform: &str) -> Game 
     )
 }
 
-fn porto_benfica(platform: &str) -> Game {
+fn porto_benfica(platform: Platform) -> Game {
     Game::new(
         "FC Porto",
         "SL Benfica",
@@ -89,7 +90,7 @@ fn porto_benfica(platform: &str) -> Game {
     )
 }
 
-fn sporting_braga(platform: &str) -> Game {
+fn sporting_braga(platform: Platform) -> Game {
     Game::new(
         "Sporting",
         "Braga",
@@ -101,7 +102,7 @@ fn sporting_braga(platform: &str) -> Game {
     )
 }
 
-fn arsenal_burnley(platform: &str) -> Game {
+fn arsenal_burnley(platform: Platform) -> Game {
     Game::new(
         "Arsenal",
         "Burnley",
@@ -113,7 +114,7 @@ fn arsenal_burnley(platform: &str) -> Game {
     )
 }
 
-fn porto_benfica_with_markets(platform: &str, markets: Vec<Market>) -> Game {
+fn porto_benfica_with_markets(platform: Platform, markets: Vec<Market>) -> Game {
     Game::new(
         "FC Porto",
         "SL Benfica",
@@ -137,16 +138,17 @@ fn total_market(id: &str, line: f32, over: f64, under: f64) -> Market {
 #[test]
 fn clusters_games_by_similarity_when_they_are_fully_equal() {
     let games = vec![
-        porto_benfica("Betano"),
-        sporting_braga("Betano"),
-        arsenal_burnley("Betano"),
-        porto_benfica("Betclic"),
-        porto_benfica("22Bet"),
-        sporting_braga("Betclic"),
-        arsenal_burnley("Betclic"),
+        porto_benfica(Platform::Betano),
+        sporting_braga(Platform::Betano),
+        arsenal_burnley(Platform::Betano),
+        porto_benfica(Platform::Betano),
+        porto_benfica(Platform::Betano),
+        sporting_braga(Platform::Betano),
+        arsenal_burnley(Platform::Betano),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -154,16 +156,18 @@ fn clusters_games_by_similarity_when_they_are_fully_equal() {
 #[test]
 fn clusters_games_by_similarity_with_fuzzy_team_names() {
     let games = vec![
-        fuzzy_portugal_game("FC Porto", "SL Benfica", "Betano"),
-        fuzzy_portugal_game("Sporting CP", "Braga", "Betano"),
-        fuzzy_england_game("Manchester Utd", "Arsenal", "Betano"),
-        fuzzy_portugal_game("Porto FC", "Benfica SL", "Betclic"),
-        fuzzy_portugal_game("Porto", "Benfica", "22Bet"),
-        fuzzy_portugal_game("Sporting", "Braga", "Betclic"),
-        fuzzy_england_game("Man United", "Arsenal", "Betclic"),
+        fuzzy_portugal_game("FC Porto", "SL Benfica", Platform::Betano),
+        fuzzy_portugal_game("Sporting CP", "Braga", Platform::Betano),
+        fuzzy_england_game("Manchester Utd", "Arsenal", Platform::Betano),
+        fuzzy_portugal_game("Porto FC", "Benfica SL", Platform::Betano),
+        fuzzy_portugal_game("Porto", "Benfica", Platform::Betano),
+        fuzzy_portugal_game("Sporting", "Braga", Platform::Betano),
+        fuzzy_england_game("Man United", "Arsenal", Platform::Betano),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -178,7 +182,7 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
             "Liga Portugal",
             15,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "FC Porto",
@@ -187,7 +191,7 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
             "Liga Portúgal",
             15,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Sporting",
@@ -196,7 +200,7 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
             "Liga Portugal",
             17,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Sporting",
@@ -205,7 +209,7 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
             "liga portugal",
             17,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Arsenal",
@@ -214,7 +218,7 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
             "Premier League",
             18,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Arsenal",
@@ -223,11 +227,13 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
             "Prémier League",
             18,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 2]);
 }
@@ -242,7 +248,7 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
             "Liga Portugal",
             15,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "FC Porto",
@@ -251,7 +257,7 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
             "Liga Portugal",
             15,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Sporting",
@@ -260,7 +266,7 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
             "Liga Portugal",
             17,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Sporting",
@@ -269,7 +275,7 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
             "Liga Portugal",
             17,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Arsenal",
@@ -278,7 +284,7 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
             "Premier League",
             18,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Arsenal",
@@ -287,11 +293,13 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
             "Premier League",
             18,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 2]);
 }
@@ -306,7 +314,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
             "Liga Portugal",
             15,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Porto FC",
@@ -315,7 +323,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
             "Liga Portúgal",
             15,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Porto",
@@ -324,7 +332,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
             "liga portugal",
             15,
             30,
-            "22Bet",
+            Platform::Betano,
         ),
         game(
             "Sporting CP",
@@ -333,7 +341,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
             "Liga Portugal",
             17,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Sporting",
@@ -342,7 +350,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
             "Liga Portúgal",
             17,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Manchester Utd",
@@ -351,7 +359,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
             "Premier League",
             18,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Man United",
@@ -360,11 +368,13 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
             "Prémier League",
             18,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -379,7 +389,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
             "Liga Portugal",
             15,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Porto FC",
@@ -388,7 +398,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
             "Liga Portugal",
             15,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Porto",
@@ -397,7 +407,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
             "Liga Portugal",
             15,
             30,
-            "22Bet",
+            Platform::Betano,
         ),
         game(
             "Sporting CP",
@@ -406,7 +416,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
             "Liga Portugal",
             17,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Sporting",
@@ -415,7 +425,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
             "Liga Portugal",
             17,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Manchester Utd",
@@ -424,7 +434,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
             "Premier League",
             18,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Man United",
@@ -433,11 +443,13 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
             "Premier League",
             18,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -452,7 +464,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
             "Liga Portugal",
             15,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Porto FC",
@@ -461,7 +473,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
             "Liga Portúgal",
             15,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Porto",
@@ -470,7 +482,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
             "liga portugal",
             15,
             30,
-            "22Bet",
+            Platform::Betano,
         ),
         game(
             "Sporting CP",
@@ -479,7 +491,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
             "Liga Portugal",
             17,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Sporting",
@@ -488,7 +500,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
             "Liga Portúgal",
             17,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Manchester Utd",
@@ -497,7 +509,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
             "Premier League",
             18,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Man United",
@@ -506,11 +518,13 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
             "Prémier League",
             18,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
 }
@@ -525,7 +539,7 @@ fn keeps_distinct_fixtures_separate_when_country_competition_and_date_match() {
             "Liga Portugal",
             15,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Porto FC",
@@ -534,7 +548,7 @@ fn keeps_distinct_fixtures_separate_when_country_competition_and_date_match() {
             "Liga Portugal",
             15,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Sporting CP",
@@ -543,7 +557,7 @@ fn keeps_distinct_fixtures_separate_when_country_competition_and_date_match() {
             "Liga Portugal",
             15,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Sporting",
@@ -552,11 +566,13 @@ fn keeps_distinct_fixtures_separate_when_country_competition_and_date_match() {
             "Liga Portugal",
             15,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2]);
 }
@@ -571,7 +587,7 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
             "Premier League",
             15,
             30,
-            "Betano",
+            Platform::Betano,
         ),
         game(
             "Man United",
@@ -580,7 +596,7 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
             "Premier League",
             15,
             30,
-            "Betclic",
+            Platform::Betano,
         ),
         game(
             "Manchester Utd",
@@ -589,11 +605,13 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
             "Prémier League",
             15,
             30,
-            "22Bet",
+            Platform::Betano,
         ),
     ];
 
-    let cluster_service = ClusterService::new(games);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[1, 2]);
 }
@@ -601,13 +619,16 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
 #[test]
 fn insert_games_updates_existing_cluster_and_returns_new_arbitrage() {
     let first_game = porto_benfica_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![total_market("betano-total", 2.5, 2.15, 1.75)],
     );
-    let second_game = porto_benfica_with_markets("Betclic", vec![]);
+    let second_game = porto_benfica_with_markets(Platform::Betano, vec![]);
     let second_game_id = second_game.id.clone();
 
-    let mut cluster_service = ClusterService::new(vec![first_game, second_game.clone()]);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(vec![first_game, second_game.clone()]);
+
     let mut updated_second_game = second_game;
 
     updated_second_game.update_markets(vec![&total_market("betclic-total", 2.5, 1.8, 2.15)]);
@@ -627,16 +648,18 @@ fn insert_games_updates_existing_cluster_and_returns_new_arbitrage() {
 #[test]
 fn insert_games_adds_unknown_game_to_existing_cluster_and_returns_arbitrage() {
     let first_game = porto_benfica_with_markets(
-        "Betano",
+        Platform::Betano,
         vec![total_market("betano-total", 2.5, 2.15, 1.75)],
     );
     let new_game = porto_benfica_with_markets(
-        "Betclic",
+        Platform::Betano,
         vec![total_market("betclic-total", 2.5, 1.8, 2.15)],
     );
     let new_game_id = new_game.id.clone();
 
-    let mut cluster_service = ClusterService::new(vec![first_game]);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(vec![first_game]);
 
     let arbitrages = cluster_service.insert_games(vec![new_game]);
 
@@ -652,11 +675,13 @@ fn insert_games_adds_unknown_game_to_existing_cluster_and_returns_arbitrage() {
 
 #[test]
 fn insert_games_creates_new_cluster_for_unknown_distinct_fixture() {
-    let first_game = porto_benfica("Betano");
-    let new_game = sporting_braga("Betclic");
+    let first_game = porto_benfica(Platform::Betano);
+    let new_game = sporting_braga(Platform::Betano);
     let new_game_id = new_game.id.clone();
 
-    let mut cluster_service = ClusterService::new(vec![first_game]);
+    let mut cluster_service = ClusterService::new();
+
+    cluster_service.add_games(vec![first_game]);
 
     let arbitrages = cluster_service.insert_games(vec![new_game]);
 

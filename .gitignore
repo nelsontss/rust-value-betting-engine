@@ -1,5 +1,9 @@
 target/
+bridge.log
 
 # Coverage outputs
 coverage/
 .github
+
+.opencode/
+.playwright-mcp/

@@ -6,12 +6,15 @@ edition = "2024"
 [dependencies]
 chrono = "0.4"
 deunicode = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.150"
 strsim = "0.11.1"
-uuid = { version = "1.23.1", features = ["v4"] }
+ureq = { version = "3", features = ["json"] }
+uuid = { version = "1.23.2", features = ["v4"] }
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.8.2"
 
-[[bench]]
-name = "benchmarks"
-harness = false
+[[bin]]
+name = "bridge"
+path = "src/bin/bridge.rs"

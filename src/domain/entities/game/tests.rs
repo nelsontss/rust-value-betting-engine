@@ -1,13 +1,14 @@
 use super::Game;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
-use crate::domain::entities::market::{
-    Line, Market, MarketType, MoneylineMarket, Odd, TotalMarket,
+use crate::domain::entities::{
+    market::{Line, Market, MarketType, MoneylineMarket, Odd, TotalMarket},
+    Platform,
 };
 
 const DEFAULT_COUNTRY: &str = "Portugal";
 const DEFAULT_COMPETITION: &str = "Primeira Liga";
-const DEFAULT_PLATFORM: &str = "Betano";
+const DEFAULT_PLATFORM: Platform = Platform::Betano;
 
 fn build_game(home_team: &str, away_team: &str, date: NaiveDateTime) -> Game {
     Game::new(
