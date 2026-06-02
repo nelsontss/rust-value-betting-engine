@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug main",
+            "cargo": {
+                "args": ["build", "--bin", "rust-value-betting-engine"],
+                "filter": "rust-value-betting-engine"
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug bridge",
+            "cargo": {
+                "args": ["build", "--bin", "bridge"],
+                "filter": "bridge"
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

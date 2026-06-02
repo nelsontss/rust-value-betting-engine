@@ -104,6 +104,18 @@ impl ClusterService {
 
         arbitrages
     }
+
+    pub fn print_clusters_with_more_than_2_games(&self) {
+        for (_, clusters_by_date) in &self.clusters {
+            for (_, cluster) in clusters_by_date {
+                if cluster.game_count() == 1 {
+                    println!("Cluster: {}", cluster.key());
+                    cluster.print_games_list();
+                    println!("------------------------------");
+                }
+            }
+        }
+    }
 }
 
 impl fmt::Display for ClusterService {

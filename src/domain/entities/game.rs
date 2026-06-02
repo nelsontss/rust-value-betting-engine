@@ -8,8 +8,8 @@ use deunicode::deunicode;
 use strsim;
 use uuid::Uuid;
 
-use crate::domain::entities::market::{Market, MarketType};
 use crate::domain::entities::Platform;
+use crate::domain::entities::market::{Market, MarketType};
 
 #[cfg(test)]
 mod tests;
@@ -30,9 +30,9 @@ struct SimilarityWeights;
 
 impl SimilarityWeights {
     const COUNTRY: f64 = 0.1;
-    const COMPETITION: f64 = 0.1;
-    const HOME_TEAM: f64 = 0.4;
-    const AWAY_TEAM: f64 = 0.4;
+    const COMPETITION: f64 = 0.02;
+    const HOME_TEAM: f64 = 0.44;
+    const AWAY_TEAM: f64 = 0.44;
 }
 
 impl Game {
@@ -146,14 +146,15 @@ impl Game {
             + (away_team_similarity * SimilarityWeights::AWAY_TEAM)
     }
 
-    fn normalize_name(name: &str) -> String {
-        let binding = deunicode(name).to_lowercase();
-        let tokens: Vec<&str> = binding.split_whitespace().map(resolve_alias).collect();
-        let (weak, strong): (Vec<&str>, Vec<&str>) =
-            tokens.into_iter().partition(|token| is_weak_token(token));
-
-        weak.into_iter().chain(strong).collect::<Vec<_>>().join(" ")
-    }
+fn normalize_name(name: &str) -> String {
+    let binding = deunicode(name).to_lowercase();
+    let tokens: Vec<&str> = binding.split_whitespace().map(resolve_alias).collect();
+    tokens
+        .into_iter()
+        .filter(|token| !is_weak_token(token))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
 
     pub fn canonical_name(&self) -> String {
         format!(
@@ -175,6 +176,26 @@ impl Game {
     pub fn markets(&self) -> &HashMap<MarketType, Market> {
         &self.markets
     }
+
+    pub fn home_team(&self) -> &str {
+        &self.home_team
+    }
+
+    pub fn away_team(&self) -> &str {
+        &self.away_team
+    }
+
+    pub fn platform(&self) -> Platform {
+        self.platform
+    }
+
+    pub fn competition(&self) -> &str {
+        &self.competition
+    }
+
+    pub fn country(&self) -> &str {
+        &self.country
+    }
 }
 
 static TEAM_ALIASES: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
@@ -192,7 +213,7 @@ static TEAM_ALIASES: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::n
 
 static WEAK_TOKENS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     HashSet::from([
-        "fc", "cf", "sc", "ac", "sl", "cp", "cd", "fk", "bk", "if", "nk", "sk",
+        "ca", "fc", "cf", "sc", "ac", "sl", "cp", "cd", "fk", "bk", "if", "nk", "sk",
     ])
 });
 

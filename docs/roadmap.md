@@ -162,10 +162,26 @@
 
 15. [ ] Double Chance market type
 
-    15.1 [ ] Add `DoubleChanceMarket` struct with 3 selections (1X, 12, X2)
+     15.1 [ ] Add `DoubleChanceMarket` struct with 3 selections (1X, 12, X2)
 
-    15.2 [ ] Add `DoubleChance` variant to `Market` enum and `MarketGroup`
+     15.2 [ ] Add `DoubleChance` variant to `Market` enum and `MarketGroup`
 
-    15.3 [ ] Implement `arbitrage_opportunites` for double chance markets
+     15.3 [ ] Implement `arbitrage_opportunites` for double chance markets
 
-    15.4 [ ] Re-enable typeId=9 parsing in `BetanoParser` mapped to `Market::DoubleChance`
+     15.4 [ ] Re-enable typeId=9 parsing in `BetanoParser` mapped to `Market::DoubleChance`
+
+16. [ ] LeBull platform integration
+
+     16.1 [X] Map LeBull upcoming API response structure (stakeType mapping)
+
+     16.2 [X] Create `LeBullParser` implementing `DataParser` trait
+
+     16.3 [ ] Create `LeBullConnector` with HTTP polling loop via `ureq`
+
+     16.4 [ ] Wire `LeBullConnector` into `BookmakerScrapperService::run`
+
+     16.5 [ ] Register `LeBullConnector` reconnect/retry logic
+
+     16.6 [ ] Add `DoubleChance` market variant (blocked on 15) and map stakeType 37
+
+     16.7 [ ] Evaluate stakeType 80, 356, 545, 702, 724, 144, 176415, 183254, 217797, 313638, 313639, 357318 (unmapped types in full request)

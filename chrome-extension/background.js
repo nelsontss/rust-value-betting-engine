@@ -1,9 +1,9 @@
 const PLATFORMS = [
   {
     name: 'betano', label: 'Betano',
-    todayUrl: 'https://www.betano.pt/api/sport/futebol/jogos-de-hoje/?req=s,stnf,c,mb,mbl',
-    upcomingUrl: 'https://www.betano.pt/api/upcomingcoupon/?sid=FOOT&req=la,s,stnf,c,mb,mbl',
-    referer: 'https://www.betano.pt/sport/futebol/jogos-de-hoje/',
+    todayUrl: 'https://www.betano.pt/en/api/sport/futebol/jogos-de-hoje/?req=s,stnf,c,mb,mbl',
+    upcomingUrl: 'https://www.betano.pt/en/api/upcomingcoupon/?sid=FOOT&req=la,s,stnf,c,mb,mbl',
+    referer: 'https://www.betano.pt/en/sport/futebol/jogos-de-hoje/',
     pollMs: 5000,
   },
 ];

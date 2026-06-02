@@ -1,19 +1,25 @@
+use std::io::Error;
 use std::sync::mpsc;
 use std::thread;
 
 use crate::domain::{ClusterService, Game};
 use crate::infrastructure::connectors::bridge_connector::BridgeConnector;
+use crate::infrastructure::connectors::lebull_connector::LeBullConnector;
 
 pub enum BookmakerEvent {
     Error,
     InsertGames(Vec<Game>),
 }
 
+pub trait Connector: Send + Sync {
+    fn start(&self, sender: mpsc::Sender<BookmakerEvent>) -> Result<(), Error>;
+}
+
 pub struct BookmakerScrapperService {
     cluster_service: ClusterService,
     tx: mpsc::Sender<BookmakerEvent>,
     rx: mpsc::Receiver<BookmakerEvent>,
-    handles: Vec<thread::JoinHandle<()>>,
+    connectors: Vec<Box<dyn Connector>>,
 }
 
 impl BookmakerScrapperService {
@@ -23,16 +29,20 @@ impl BookmakerScrapperService {
             cluster_service: ClusterService::new(),
             tx,
             rx,
-            handles: vec![],
+            connectors: vec![
+                Box::new(BridgeConnector::new()),
+                Box::new(LeBullConnector::new()),
+            ],
         }
     }
 
     pub fn run(&mut self) {
-        let tx = self.tx.clone();
-        let connector = BridgeConnector::new();
-        self.handles.push(thread::spawn(move || {
-            connector.start(tx);
-        }));
+        for connector in self.connectors.drain(..) {
+            let tx = self.tx.clone();
+            thread::spawn(move || {
+                let _ = connector.start(tx);
+            });
+        }
 
         for bookmaker_event in &self.rx {
             match bookmaker_event {

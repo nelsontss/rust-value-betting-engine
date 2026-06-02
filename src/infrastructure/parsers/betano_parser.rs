@@ -20,8 +20,6 @@ impl BetanoParser {
         let mut games = vec![];
 
         for block in blocks {
-            let competition = block.get("name").and_then(|v| v.as_str()).unwrap_or("");
-
             let events = match block.get("events").and_then(|e| e.as_array()) {
                 Some(events) => events,
                 None => continue,
@@ -44,6 +42,11 @@ impl BetanoParser {
                 }
                 let home_team = parts[0].trim();
                 let away_team = parts[1].trim();
+
+                let competition = event
+                    .get("leagueName")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
 
                 let country = event
                     .get("regionName")

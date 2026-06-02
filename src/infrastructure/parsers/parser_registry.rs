@@ -4,7 +4,8 @@ use serde_json::Value;
 
 use crate::domain::entities::Platform;
 use crate::domain::Game;
-use crate::infrastructure::connectors::betano_connector::BetanoParser;
+use crate::infrastructure::parsers::betano_parser::BetanoParser;
+use crate::infrastructure::parsers::lebull_parser::LeBullParser;
 
 pub trait DataParser: Send {
     fn parse(&self, data: Value) -> Vec<Game>;
@@ -13,6 +14,12 @@ pub trait DataParser: Send {
 impl DataParser for BetanoParser {
     fn parse(&self, data: Value) -> Vec<Game> {
         BetanoParser::parse_data(data)
+    }
+}
+
+impl DataParser for LeBullParser {
+    fn parse(&self, data: Value) -> Vec<Game> {
+        LeBullParser::parse_data(data)
     }
 }
 
@@ -26,6 +33,7 @@ impl ParserRegistry {
             parsers: HashMap::new(),
         };
         registry.register(Platform::Betano, Box::new(BetanoParser::new()));
+        registry.register(Platform::LeBull, Box::new(LeBullParser::new()));
         registry
     }
 

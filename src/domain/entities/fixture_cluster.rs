@@ -6,6 +6,7 @@ use crate::domain::entities::{Arbitrage, Game, Market, MarketGroup, MarketType};
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug)]
 pub struct FixtureCluster {
     key: String,
     games: HashMap<String, Game>,
@@ -40,7 +41,46 @@ impl FixtureCluster {
             .games
             .iter()
             .filter(|(_, other_game)| {
-                game.similarity_score(*other_game) > 0.85 && game.date == other_game.date
+                let score = game.similarity_score(*other_game);
+
+                if game.date == other_game.date && score > 0.67 && score < 0.85 {
+                    println!(
+                        "{}:{:?} - {}:{:?}",
+                        game.home_team(),
+                        game.platform(),
+                        other_game.home_team(),
+                        other_game.platform()
+                    );
+                    println!(
+                        "{}:{:?} - {}:{:?}",
+                        game.away_team(),
+                        game.platform(),
+                        other_game.away_team(),
+                        other_game.platform()
+                    );
+                    println!(
+                        "{}:{:?} - {}:{:?}",
+                        game.competition(),
+                        game.platform(),
+                        other_game.competition(),
+                        other_game.platform()
+                    );
+                    println!(
+                        "{}:{:?} - {}:{:?}",
+                        game.country(),
+                        game.platform(),
+                        other_game.country(),
+                        other_game.platform()
+                    );
+                    println!(
+                        "{} - {}",
+                        game.canonical_name(),
+                        other_game.canonical_name(),
+                    );
+                    println!("Score: {score}");
+                }
+
+                score > 0.85 && game.date == other_game.date
             })
             .count() as f32
             > self.games.len() as f32 * 0.66
@@ -112,6 +152,18 @@ impl FixtureCluster {
         }
 
         Some(group)
+    }
+
+    pub fn print_games_list(&self) {
+        for (_, game) in self.games.iter() {
+            let platform = format!("{:?}", game.platform()).to_lowercase();
+            println!(
+                "{} vs {} @ {}",
+                game.home_team(),
+                game.away_team(),
+                platform
+            );
+        }
     }
 }
 

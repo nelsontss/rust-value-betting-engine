@@ -16,5 +16,9 @@ uuid = { version = "1.23.2", features = ["v4"] }
 criterion = "0.8.2"
 
 [[bin]]
+name = "rust-value-betting-engine"
+path = "src/main.rs"
+
+[[bin]]
 name = "bridge"
 path = "src/bin/bridge.rs"
