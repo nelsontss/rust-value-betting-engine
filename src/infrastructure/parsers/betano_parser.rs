@@ -4,6 +4,9 @@ use serde_json::Value;
 use crate::domain::entities::{Market, Platform};
 use crate::domain::Game;
 
+#[cfg(test)]
+mod tests;
+
 pub struct BetanoParser {}
 
 impl BetanoParser {
@@ -91,6 +94,7 @@ impl BetanoParser {
                     };
 
                     match type_id {
+                        // Match Result (1X2)
                         1 => {
                             if selections.len() >= 3 {
                                 let home = selections[0]
@@ -110,6 +114,7 @@ impl BetanoParser {
                                 }
                             }
                         }
+                        // Over/Under Goals
                         13 => {
                             if selections.len() >= 2 {
                                 let over = selections[0]
@@ -127,7 +132,8 @@ impl BetanoParser {
                                 }
                             }
                         }
-                        10 | 15 => {
+                        // Draw No Bet (2-way winner market, functional Moneyline equivalent)
+                        10 => {
                             if selections.len() >= 2 {
                                 let home = selections[0]
                                     .get("price")
@@ -142,6 +148,7 @@ impl BetanoParser {
                                 }
                             }
                         }
+                        // 1st Half Over/Under Goals
                         14 => {
                             if selections.len() >= 2 {
                                 let over = selections[0]
@@ -159,6 +166,7 @@ impl BetanoParser {
                                 }
                             }
                         }
+                        // type_id 15 is "Both Teams to Score" — not a moneyline market, skipped
                         _ => {}
                     }
                 }

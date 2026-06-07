@@ -39,10 +39,10 @@ impl Line {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchResultMarket {
-    id: String,
-    home: Odd,
-    draw: Odd,
-    away: Odd,
+    pub id: String,
+    pub home: Odd,
+    pub draw: Odd,
+    pub away: Odd,
 }
 
 fn best_odd_with_id<I>(markets: I) -> (Odd, String)

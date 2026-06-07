@@ -1,21 +1,30 @@
 use core::fmt;
 use std::collections::{HashMap, HashSet};
 
-use crate::domain::entities::{Arbitrage, Game, Market, MarketGroup, MarketType};
+use chrono::{DateTime, Utc};
+
+use crate::domain::{
+    Platform,
+    entities::{Arbitrage, Game, Market, MarketGroup, MarketType},
+};
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FixtureCluster {
     key: String,
     games: HashMap<String, Game>,
     // Secondary index by market type. The current market state always lives in Game;
     // this index is only used to find candidate markets efficiently across platforms.
     market_type_to_game_ids: HashMap<MarketType, HashSet<String>>,
+    updated_at: DateTime<Utc>,
+    representative_game: Option<Game>,
 }
 
 impl FixtureCluster {
+    const REPRESENTATIVE_PLATFORM: Platform = Platform::Betano;
+
     pub fn key(&self) -> String {
         self.key.clone()
     }
@@ -25,6 +34,8 @@ impl FixtureCluster {
             key: game.canonical_name(),
             games: HashMap::new(),
             market_type_to_game_ids: HashMap::new(),
+            updated_at: chrono::Utc::now(),
+            representative_game: Some(game.clone()),
         };
 
         fixture_cluster.add_game(game);
@@ -98,6 +109,10 @@ impl FixtureCluster {
         let game_id = game.id.clone();
 
         if !self.games.contains_key(&game_id) {
+            if game.platform() == FixtureCluster::REPRESENTATIVE_PLATFORM {
+                self.representative_game = Some(game.clone());
+            }
+
             self.games.entry(game_id.clone()).or_insert(game);
 
             for market_type in market_types {
@@ -106,6 +121,8 @@ impl FixtureCluster {
                     .or_default()
                     .insert(game_id.clone());
             }
+
+            self.updated_at = chrono::Utc::now();
         }
     }
 
@@ -118,12 +135,18 @@ impl FixtureCluster {
             let game = self.games.get(&game_id).unwrap();
             let market_types = game.markets().keys().cloned().collect::<Vec<_>>();
 
+            if game.platform() == FixtureCluster::REPRESENTATIVE_PLATFORM {
+                self.representative_game = Some(game.clone());
+            }
+
             for market_type in market_types {
                 self.market_type_to_game_ids
                     .entry(market_type.clone())
                     .or_default()
                     .insert(game_id.clone());
             }
+
+            self.updated_at = chrono::Utc::now();
         }
     }
 
@@ -164,6 +187,25 @@ impl FixtureCluster {
                 platform
             );
         }
+    }
+
+    pub fn games(&self) -> Vec<Game> {
+        let mut games: Vec<Game> = self.games.values().map(|game| game.clone()).collect();
+        games.sort_by(|a, b| {
+            let platform_order = |p: &Platform| if *p == Platform::Betano { 0 } else { 1 };
+            platform_order(&a.platform())
+                .cmp(&platform_order(&b.platform()))
+                .then(a.id.cmp(&b.id))
+        });
+        games
+    }
+
+    pub fn representative_game(&self) -> Option<&Game> {
+        self.representative_game.as_ref()
+    }
+
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at.clone()
     }
 }
 

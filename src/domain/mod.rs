@@ -1,6 +1,5 @@
 pub mod entities;
 pub mod services;
-pub mod value_objects;
 
 pub use entities::Arbitrage;
 pub use entities::Game;

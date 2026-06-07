@@ -1,7 +1,10 @@
 use std::io::Write;
 use std::os::unix::net::UnixListener;
-use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
+
+use tokio::sync::mpsc::{Receiver, channel};
+use tokio::time::timeout;
 
 use crate::application::services::bookmaker_scrapper_service::BookmakerEvent;
 use crate::infrastructure::connectors::bridge_connector::BridgeConnector;
@@ -10,13 +13,13 @@ fn setup_socket(
     path: &str,
 ) -> (
     UnixListener,
-    mpsc::Receiver<BookmakerEvent>,
+    Receiver<BookmakerEvent>,
     thread::JoinHandle<()>,
 ) {
     let _ = std::fs::remove_file(path);
     let listener = UnixListener::bind(path).unwrap();
     let connector = BridgeConnector::new();
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = channel(10);
     let path_owned = path.to_string();
     let handle = thread::spawn(move || {
         let _ = connector.start_at(tx, &path_owned);
@@ -50,14 +53,14 @@ fn new_creates_bridge_connector() {
 #[test]
 fn start_returns_gracefully_when_no_socket() {
     let connector = BridgeConnector::new();
-    let (tx, _rx) = mpsc::channel();
+    let (tx, _rx) = channel(1);
     let _ = connector.start_at(tx, "/tmp/nonexistent-test-socket.sock");
 }
 
-#[test]
-fn start_reads_and_forwards_events_from_socket() {
+#[tokio::test]
+async fn start_reads_and_forwards_events_from_socket() {
     let path = "/tmp/test-bridge-connector.sock";
-    let (listener, rx, handle) = setup_socket(path);
+    let (listener, mut rx, handle) = setup_socket(path);
     let (mut stream, _) = listener.accept().unwrap();
     send_message(
         &mut stream,
@@ -65,15 +68,15 @@ fn start_reads_and_forwards_events_from_socket() {
     );
     drop(stream);
 
-    let event = rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+    let event = rx.recv().await.unwrap();
     assert!(matches!(event, BookmakerEvent::InsertGames(_)));
     cleanup(path, listener, handle);
 }
 
-#[test]
-fn start_forwards_multiple_messages() {
+#[tokio::test]
+async fn start_forwards_multiple_messages() {
     let path = "/tmp/test-bridge-connector-multi.sock";
-    let (listener, rx, handle) = setup_socket(path);
+    let (listener, mut rx, handle) = setup_socket(path);
     let (mut stream, _) = listener.accept().unwrap();
 
     for _ in 0..3 {
@@ -84,29 +87,29 @@ fn start_forwards_multiple_messages() {
     drop(stream);
 
     for _ in 0..3 {
-        let event = rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        let event = rx.recv().await.unwrap();
         assert!(matches!(event, BookmakerEvent::InsertGames(_)));
     }
     cleanup(path, listener, handle);
 }
 
-#[test]
-fn start_handles_invalid_json_gracefully() {
+#[tokio::test]
+async fn start_handles_invalid_json_gracefully() {
     let path = "/tmp/test-bridge-connector-invalid.sock";
-    let (listener, rx, handle) = setup_socket(path);
+    let (listener, mut rx, handle) = setup_socket(path);
     let (mut stream, _) = listener.accept().unwrap();
     send_message(&mut stream, "not valid json");
-    drop(stream);
 
-    let result = rx.recv_timeout(std::time::Duration::from_millis(500));
+    let result = timeout(Duration::from_millis(500), rx.recv()).await;
     assert!(result.is_err());
+    drop(stream);
     cleanup(path, listener, handle);
 }
 
-#[test]
-fn start_recovers_after_invalid_message_and_processes_next() {
+#[tokio::test]
+async fn start_recovers_after_invalid_message_and_processes_next() {
     let path = "/tmp/test-bridge-connector-recovery.sock";
-    let (listener, rx, handle) = setup_socket(path);
+    let (listener, mut rx, handle) = setup_socket(path);
     let (mut stream, _) = listener.accept().unwrap();
 
     send_message(&mut stream, "bad payload");
@@ -116,7 +119,7 @@ fn start_recovers_after_invalid_message_and_processes_next() {
     );
     drop(stream);
 
-    let event = rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+    let event = rx.recv().await.unwrap();
     assert!(matches!(event, BookmakerEvent::InsertGames(_)));
     cleanup(path, listener, handle);
 }

@@ -1,16 +1,26 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::HashMap,
+    fmt::{self},
+    sync::Arc,
+};
 
 use chrono::NaiveDateTime;
+use tokio::sync::broadcast::{self, Receiver};
 
-use crate::domain::entities::{Arbitrage, FixtureCluster, Game};
+use crate::domain::{
+    entities::{Arbitrage, FixtureCluster, Game},
+    services::cluster_service::ClusterServiceErrors::ClusterNotFound,
+};
 
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug)]
 pub struct ClusterService {
     game_id_to_fixture_cluster_key: HashMap<String, String>,
     cluster_id_to_date: HashMap<String, NaiveDateTime>,
-    clusters: HashMap<NaiveDateTime, HashMap<String, FixtureCluster>>,
+    clusters: HashMap<NaiveDateTime, HashMap<String, Arc<FixtureCluster>>>,
+    event_tx: broadcast::Sender<Arc<FixtureCluster>>,
 }
 
 impl ClusterService {
@@ -19,6 +29,7 @@ impl ClusterService {
             clusters: HashMap::new(),
             game_id_to_fixture_cluster_key: HashMap::new(),
             cluster_id_to_date: HashMap::new(),
+            event_tx: broadcast::Sender::new(20),
         }
     }
 
@@ -36,7 +47,7 @@ impl ClusterService {
 
             if let Some(clusters) = self.clusters.get_mut(&game_date) {
                 for (_, cluster) in clusters.iter_mut() {
-                    match cluster.try_to_add_game(pending_game.take().unwrap()) {
+                    match Arc::make_mut(cluster).try_to_add_game(pending_game.take().unwrap()) {
                         Ok(_) => {
                             found = true;
                             self.game_id_to_fixture_cluster_key
@@ -46,6 +57,10 @@ impl ClusterService {
                                 .entry(cluster.key())
                                 .insert_entry(game_date);
                             arbitrages.append(&mut cluster.arbitrage_opportunites());
+
+                            if cluster.game_count() > 1 {
+                                let _ = self.event_tx.send(cluster.clone());
+                            }
 
                             break;
                         }
@@ -61,7 +76,7 @@ impl ClusterService {
                     .entry(game_date)
                     .or_insert_with(HashMap::new)
                     .entry(cluster_key.clone())
-                    .or_insert(cluster);
+                    .or_insert(Arc::new(cluster));
                 self.game_id_to_fixture_cluster_key
                     .entry(game_id)
                     .or_insert(cluster_key.clone());
@@ -85,7 +100,12 @@ impl ClusterService {
                     clusters_by_id
                         .entry(cluster_id.clone())
                         .and_modify(|cluster| {
-                            cluster.update_markets(game_id, game.markets().values().collect())
+                            Arc::make_mut(cluster)
+                                .update_markets(game_id.clone(), game.markets().values().collect());
+
+                            if cluster.game_count() > 1 {
+                                let _ = self.event_tx.send(cluster.clone());
+                            }
                         });
                 });
                 arbitrages.append(
@@ -105,17 +125,42 @@ impl ClusterService {
         arbitrages
     }
 
-    pub fn print_clusters_with_more_than_2_games(&self) {
-        for (_, clusters_by_date) in &self.clusters {
-            for (_, cluster) in clusters_by_date {
-                if cluster.game_count() == 1 {
-                    println!("Cluster: {}", cluster.key());
-                    cluster.print_games_list();
-                    println!("------------------------------");
+    pub fn get_clusters(&self) -> Vec<Arc<FixtureCluster>> {
+        self.clusters
+            .values()
+            .flat_map(|clusters_by_key| {
+                clusters_by_key.values().filter_map(|cluster| {
+                    if cluster.game_count() > 1 {
+                        Some(cluster.clone())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect()
+    }
+
+    pub fn get_cluster(
+        &self,
+        cluster_id: &str,
+    ) -> Result<Arc<FixtureCluster>, ClusterServiceErrors> {
+        if let Some(cluster_date) = self.cluster_id_to_date.get(cluster_id) {
+            if let Some(clusters_on_date) = self.clusters.get(cluster_date) {
+                if let Some(cluster) = clusters_on_date.get(cluster_id) {
+                    return Ok(cluster.clone());
                 }
             }
         }
+        Err(ClusterNotFound)
     }
+
+    pub fn subscribe_to_game_updates(&self) -> Receiver<Arc<FixtureCluster>> {
+        self.event_tx.subscribe()
+    }
+}
+
+pub enum ClusterServiceErrors {
+    ClusterNotFound,
 }
 
 impl fmt::Display for ClusterService {

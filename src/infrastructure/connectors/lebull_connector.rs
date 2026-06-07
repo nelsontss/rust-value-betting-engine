@@ -1,18 +1,17 @@
-use std::io::Error;
-use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use chrono::Utc;
+use tokio::sync::mpsc::Sender;
 
 use crate::application::services::bookmaker_scrapper_service::{BookmakerEvent, Connector};
 use crate::domain::Platform;
 use crate::infrastructure::parsers::parser_registry::ParserRegistry;
+use crate::shared::error::Result;
 
 pub struct LeBullConnector {}
 
 impl Connector for LeBullConnector {
-    fn start(&self, sender: mpsc::Sender<BookmakerEvent>) -> Result<(), Error> {
+    fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
         let registry = ParserRegistry::new();
 
         loop {
@@ -24,12 +23,7 @@ impl Connector for LeBullConnector {
                     if let Ok(json) = response.into_body().read_json::<serde_json::Value>() {
                         match registry.parse(&Platform::LeBull, json) {
                             Some(games) => {
-                                println!(
-                                    "Inserting {} games from LeBull @ {:?}.",
-                                    games.len(),
-                                    Utc::now()
-                                );
-                                let _ = sender.send(BookmakerEvent::InsertGames(games));
+                                let _ = sender.blocking_send(BookmakerEvent::InsertGames(games));
                             }
                             None => eprintln!("no parser registered for platform LeBull"),
                         }

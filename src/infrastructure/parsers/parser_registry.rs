@@ -2,6 +2,9 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
+#[cfg(test)]
+mod tests;
+
 use crate::domain::entities::Platform;
 use crate::domain::Game;
 use crate::infrastructure::parsers::betano_parser::BetanoParser;

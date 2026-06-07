@@ -5,6 +5,9 @@ use std::collections::HashMap;
 use crate::domain::entities::{Market, Platform};
 use crate::domain::Game;
 
+#[cfg(test)]
+mod tests;
+
 pub struct LeBullParser {}
 
 impl LeBullParser {

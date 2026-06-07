@@ -1,18 +1,18 @@
-use std::io::{Error, Read};
+use std::io::Read;
 use std::os::unix::net::UnixStream;
-use std::sync::mpsc;
 
-use chrono::DateTime;
+use tokio::sync::mpsc::Sender;
 
 use crate::application::services::bookmaker_scrapper_service::{BookmakerEvent, Connector};
 use crate::infrastructure::bridge::BridgeMessage;
 use crate::infrastructure::config::BridgeConfig;
 use crate::infrastructure::parsers::parser_registry::ParserRegistry;
+use crate::shared::error::Result;
 
 pub struct BridgeConnector {}
 
 impl Connector for BridgeConnector {
-    fn start(&self, sender: mpsc::Sender<BookmakerEvent>) -> Result<(), Error> {
+    fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
         self.start_at(sender, BridgeConfig::SOCKET_PATH)
     }
 }
@@ -22,11 +22,7 @@ impl BridgeConnector {
         BridgeConnector {}
     }
 
-    fn start_at(
-        &self,
-        sender: mpsc::Sender<BookmakerEvent>,
-        socket_path: &str,
-    ) -> Result<(), Error> {
+    fn start_at(&self, sender: Sender<BookmakerEvent>, socket_path: &str) -> Result<()> {
         let registry = ParserRegistry::new();
         let mut stream = UnixStream::connect(socket_path)?;
 
@@ -42,18 +38,11 @@ impl BridgeConnector {
                 Ok(bridge_message) => match bridge_message {
                     BridgeMessage::OddsUpdate {
                         platform,
-                        timestamp,
+                        timestamp: _,
                         data,
                     } => match registry.parse(&platform, data) {
                         Some(games) => {
-                            println!(
-                                "Inserting {} games from {:?} @ {:?}.",
-                                games.len(),
-                                platform,
-                                DateTime::from_timestamp_millis(timestamp as i64)
-                                    .unwrap_or_default()
-                            );
-                            let _ = sender.send(BookmakerEvent::InsertGames(games));
+                            let _ = sender.blocking_send(BookmakerEvent::InsertGames(games));
                         }
                         None => eprintln!("no parser registered for platform {:?}", platform),
                     },
