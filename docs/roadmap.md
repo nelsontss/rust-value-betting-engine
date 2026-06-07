@@ -152,36 +152,88 @@
 
     13.3 [X] Map typeId=14 (Over/Under 1st Half) to Total market
 
-    13.4 [X] Map typeId=15 (Both Teams to Score) to Moneyline
+     13.4 [X] Skip typeId=15 (Both Teams to Score) — not a moneyline equivalent
 
 14. [X] Connector resilience and extensibility
 
-    14.1 [ ] Auto-reconnect loop for bridge socket disconnections
+     14.1 [ ] Auto-reconnect loop for bridge socket disconnections
 
-    14.2 [X] Plugin-style `DataParser` registry for multi-platform support without modifying `BridgeConnector`
+     14.2 [X] Plugin-style `DataParser` registry for multi-platform support without modifying `BridgeConnector`
 
 15. [ ] Double Chance market type
 
-     15.1 [ ] Add `DoubleChanceMarket` struct with 3 selections (1X, 12, X2)
+      15.1 [ ] Add `DoubleChanceMarket` struct with 3 selections (1X, 12, X2)
 
-     15.2 [ ] Add `DoubleChance` variant to `Market` enum and `MarketGroup`
+      15.2 [ ] Add `DoubleChance` variant to `Market` enum and `MarketGroup`
 
-     15.3 [ ] Implement `arbitrage_opportunites` for double chance markets
+      15.3 [ ] Implement `arbitrage_opportunites` for double chance markets
 
-     15.4 [ ] Re-enable typeId=9 parsing in `BetanoParser` mapped to `Market::DoubleChance`
+      15.4 [ ] Re-enable typeId=9 parsing in `BetanoParser` mapped to `Market::DoubleChance`
 
-16. [ ] LeBull platform integration
+16. [X] LeBull platform integration
 
-     16.1 [X] Map LeBull upcoming API response structure (stakeType mapping)
+      16.1 [X] Map LeBull upcoming API response structure (stakeType mapping)
 
-     16.2 [X] Create `LeBullParser` implementing `DataParser` trait
+      16.2 [X] Create `LeBullParser` implementing `DataParser` trait
 
-     16.3 [ ] Create `LeBullConnector` with HTTP polling loop via `ureq`
+      16.3 [X] Create `LeBullConnector` with HTTP polling loop via `ureq`
 
-     16.4 [ ] Wire `LeBullConnector` into `BookmakerScrapperService::run`
+      16.4 [X] Wire `LeBullConnector` into `BookmakerScrapperService::run`
 
-     16.5 [ ] Register `LeBullConnector` reconnect/retry logic
+      16.5 [ ] Register `LeBullConnector` reconnect/retry logic
 
-     16.6 [ ] Add `DoubleChance` market variant (blocked on 15) and map stakeType 37
+      16.6 [ ] Add `DoubleChance` market variant (blocked on 15) and map stakeType 37
 
-     16.7 [ ] Evaluate stakeType 80, 356, 545, 702, 724, 144, 176415, 183254, 217797, 313638, 313639, 357318 (unmapped types in full request)
+      16.7 [ ] Evaluate stakeType 80, 356, 545, 702, 724, 144, 176415, 183254, 217797, 313638, 313639, 357318 (unmapped types in full request)
+
+17. [X] Async runtime migration
+
+      17.1 [X] Add tokio dependency with full features
+
+      17.2 [X] Swap `std::sync::mpsc` for `tokio::sync::mpsc` in connectors and service
+
+      17.3 [X] Make `BookmakerScrapperService::run` async
+
+      17.4 [X] Add tokio `broadcast` channel for live cluster update notifications
+
+      17.5 [X] Add `ClusterService::subscribe_to_game_updates` for downstream consumers
+
+      17.6 [X] Migrate `main` to `#[tokio::main]` with `tokio::select!` for graceful shutdown
+
+18. [X] SSE web server
+
+      18.1 [X] Add `axum`, `tower-http`, `tokio-stream`, `tracing`, `tracing-subscriber` dependencies
+
+      18.2 [X] Create `infrastructure::server` module with SSE endpoint for cluster events
+
+      18.3 [X] Serve cluster list and individual cluster detail via JSON endpoints
+
+      18.4 [X] Wire server startup alongside the engine in `main`
+
+19. [X] Tracing and logging infrastructure
+
+      19.1 [X] Add `tracing` and `tracing-subscriber` with env-filter support
+
+      19.2 [X] Remove raw `println!` from connectors and parsers
+
+      19.3 [X] Initialize tracing subscriber with `RUST_LOG` env-var support in `main`
+
+20. [X] FixtureCluster enhancements
+
+      20.1 [X] Add `updated_at` timestamp tracking on cluster mutations
+
+      20.2 [X] Add `representative_game` field for Betano-first display preference
+
+      20.3 [X] Add `games()` accessor with deterministic sort (Betano first, then by ID)
+
+      20.4 [X] Expose `MatchResultMarket` fields as `pub` for external access
+
+21. [X] Parser test coverage
+
+      21.1 [X] Add tests for `BetanoParser`: empty input, all typeId branches, selection validation, multiple events/blocks
+
+      21.2 [X] Add tests for `LeBullParser`: all stakeType branches, date parsing, live filtering, multiple leagues/lines
+
+      21.3 [X] Add tests for `ParserRegistry`: registration, dispatch, unknown platform
+
+      21.4 [X] Add tests for `Platform` enum: variants, serde round-trip
