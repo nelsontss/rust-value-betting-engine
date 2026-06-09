@@ -94,23 +94,29 @@
 
     8.5 [X] Fix test `assert_cluster_sizes` to flatten the nested HashMap when computing cluster counts and sizes
 
-9. [ ] Performance benchmarks
+ 9. [X] Performance benchmarks
 
-    9.1 [X] Add Criterion.rs dev-dependency and benchmark harness configuration
+     9.1 [X] Add Criterion.rs dev-dependency and benchmark harness configuration
 
-    9.2 [X] Implement benchmark data generators (`src/benchmark/data.rs`) for distinct fixtures, clusters, arbitrage scenarios, and market-variant games
+     9.2 [X] Remove synthetic-data benchmark generators; replace with platform pipeline benchmarks
 
-    9.3 [X] Implement throughput benchmarks for `add_games` and `insert_games` across varying counts and platform densities
+     9.3 [X] Implement parser throughput benchmarks for `BetanoParser` and `LeBullParser` at 10/100/1000 event counts
 
-    9.4 [X] Implement latency benchmarks for arbitrage detection under no load, steady load, bursts, stale updates, and capacity curves
+     9.4 [X] Implement engine ingestion benchmarks: `insert_games` for distinct and clustering scenarios at 10/100/1000 game counts
 
-    9.5 [X] Implement CPU/memory benchmarks for per-game insert cost and service initialization throughput
+     9.5 [X] Implement market update benchmarks simulating live odds updates at 10/100/500 simultaneous updates
 
-    9.6 [X] Implement response-time benchmarks for similarity scoring, cluster arbitrage scans, market-group arbitration, and fixture matching
+     9.6 [X] Implement cross-platform clustering benchmark testing 2/5/10 platforms on the same fixture
 
-     9.7 [ ] Establish baseline performance targets and regression alerting
+     9.7 [X] Implement cluster query latency benchmarks for `get_clusters` (10–2000 clusters) and `get_cluster_by_id` (O(1) lookup)
 
-     9.8 [ ] Validate benchmarks against realistic production-like data shapes
+     9.8 [X] Implement serialization throughput benchmark for `ClusterResponse` JSON output
+
+     9.9 [X] Implement SSE broadcast latency benchmark measuring tokio broadcast channel delivery
+
+      9.10 [ ] Establish baseline performance targets and regression alerting
+
+      9.11 [ ] Validate benchmarks against realistic production-like data shapes
 
 10. [X] Chrome extension data ingestion
 

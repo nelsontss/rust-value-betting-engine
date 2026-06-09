@@ -22,7 +22,11 @@ ureq = { version = "3", features = ["json"] }
 uuid = { version = "1.23.2", features = ["v4"] }
 
 [dev-dependencies]
-criterion = "0.8.2"
+criterion = { version = "0.8.2", features = ["async", "async_tokio"] }
+
+[[bench]]
+name = "benchmarks"
+harness = false
 
 [[bin]]
 name = "rust-value-betting-engine"

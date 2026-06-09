@@ -1,5 +1,4 @@
 pub mod application;
-pub mod benchmark;
 pub mod domain;
 pub mod infrastructure;
 mod shared;

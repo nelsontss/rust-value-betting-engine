@@ -54,43 +54,6 @@ impl FixtureCluster {
             .filter(|(_, other_game)| {
                 let score = game.similarity_score(*other_game);
 
-                if game.date == other_game.date && score > 0.67 && score < 0.85 {
-                    println!(
-                        "{}:{:?} - {}:{:?}",
-                        game.home_team(),
-                        game.platform(),
-                        other_game.home_team(),
-                        other_game.platform()
-                    );
-                    println!(
-                        "{}:{:?} - {}:{:?}",
-                        game.away_team(),
-                        game.platform(),
-                        other_game.away_team(),
-                        other_game.platform()
-                    );
-                    println!(
-                        "{}:{:?} - {}:{:?}",
-                        game.competition(),
-                        game.platform(),
-                        other_game.competition(),
-                        other_game.platform()
-                    );
-                    println!(
-                        "{}:{:?} - {}:{:?}",
-                        game.country(),
-                        game.platform(),
-                        other_game.country(),
-                        other_game.platform()
-                    );
-                    println!(
-                        "{} - {}",
-                        game.canonical_name(),
-                        other_game.canonical_name(),
-                    );
-                    println!("Score: {score}");
-                }
-
                 score > 0.85 && game.date == other_game.date
             })
             .count() as f32
