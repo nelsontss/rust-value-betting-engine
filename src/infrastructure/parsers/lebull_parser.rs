@@ -88,6 +88,7 @@ impl LeBullParser {
                         2 => parse_asian_handicap(stakes, &event_id, &mut markets),
                         3 => parse_total(stakes, &event_id, &mut markets),
                         26 | 274556 => parse_2way(stakes, &event_id, &mut markets),
+                        37 => parse_double_chance(stakes, &event_id, &mut markets),
                         _ => {}
                     }
                 }
@@ -186,6 +187,18 @@ fn parse_2way(stakes: &[Value], event_id: &str, markets: &mut Vec<Market>) {
 
     if home > 0.0 && away > 0.0 {
         if let Ok(m) = Market::moneyline(event_id, home, away) {
+            markets.push(m);
+        }
+    }
+}
+
+fn parse_double_chance(stakes: &[Value], event_id: &str, markets: &mut Vec<Market>) {
+    let home_or_draw = stake_value(stakes, 1).unwrap_or(0.0);
+    let home_or_away = stake_value(stakes, 2).unwrap_or(0.0);
+    let draw_or_away = stake_value(stakes, 3).unwrap_or(0.0);
+
+    if home_or_draw > 0.0 && home_or_away > 0.0 && draw_or_away > 0.0 {
+        if let Ok(m) = Market::double_chance(event_id, home_or_draw, home_or_away, draw_or_away) {
             markets.push(m);
         }
     }

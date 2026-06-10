@@ -6,7 +6,7 @@ use crate::{domain::ClusterService, infrastructure::server::routes::routes::buil
 
 pub async fn serve(cluster_service: Arc<RwLock<ClusterService>>) {
     let app = build_router(cluster_service);
-    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".into());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3005".into());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}",))
         .await

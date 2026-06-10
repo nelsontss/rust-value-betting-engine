@@ -3,18 +3,6 @@ use serde_json::json;
 use crate::domain::entities::{Market, Platform};
 use crate::infrastructure::parsers::betano_parser::BetanoParser;
 
-fn market_type_ids(markets: &[Market]) -> Vec<i64> {
-    markets
-        .iter()
-        .map(|m| match m {
-            Market::MatchResult(_) => 1,
-            Market::Moneyline(_) => 10,
-            Market::Total(_) => 13,
-            _ => panic!("unexpected market type"),
-        })
-        .collect()
-}
-
 fn moneyline_count(markets: &[Market]) -> usize {
     markets
         .iter()
@@ -33,6 +21,13 @@ fn total_count(markets: &[Market]) -> usize {
     markets
         .iter()
         .filter(|m| matches!(m, Market::Total(_)))
+        .count()
+}
+
+fn double_chance_count(markets: &[Market]) -> usize {
+    markets
+        .iter()
+        .filter(|m| matches!(m, Market::DoubleChance(_)))
         .count()
 }
 
@@ -142,6 +137,24 @@ fn parse_data_match_result_market_type_1() {
 }
 
 #[test]
+fn parse_data_type_9_is_double_chance() {
+    let markets = vec![market_with_selections(9, vec![
+        selection(1.5),
+        selection(2.6),
+        selection(1.8),
+    ])];
+    let events = vec![betano_event("evt-dc", "Benfica", "Porto", markets)];
+    let data = json!({"blocks": [block_with_events(events)]});
+
+    let games = BetanoParser::parse_data(data);
+    assert_eq!(games.len(), 1);
+    assert_eq!(
+        double_chance_count(&games[0].markets().values().cloned().collect::<Vec<_>>()),
+        1
+    );
+}
+
+#[test]
 fn parse_data_type_10_is_moneyline() {
     let markets = vec![market_with_selections(10, vec![
         selection(1.8),
@@ -194,8 +207,10 @@ fn parse_data_type_15_is_skipped() {
 
     let games = BetanoParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let types = market_type_ids(&games[0].markets().values().cloned().collect::<Vec<_>>());
-    assert_eq!(types, vec![1]);
+    let all_markets = games[0].markets().values().cloned().collect::<Vec<_>>();
+    assert_eq!(match_result_count(&all_markets), 1);
+    assert_eq!(moneyline_count(&all_markets), 0);
+    assert_eq!(total_count(&all_markets), 0);
 }
 
 #[test]
@@ -227,8 +242,10 @@ fn parse_data_unknown_type_id_is_skipped() {
 
     let games = BetanoParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let types = market_type_ids(&games[0].markets().values().cloned().collect::<Vec<_>>());
-    assert_eq!(types, vec![1]);
+    let all_markets = games[0].markets().values().cloned().collect::<Vec<_>>();
+    assert_eq!(match_result_count(&all_markets), 1);
+    assert_eq!(moneyline_count(&all_markets), 0);
+    assert_eq!(total_count(&all_markets), 0);
 }
 
 #[test]

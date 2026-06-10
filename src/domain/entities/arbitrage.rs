@@ -1,4 +1,4 @@
-use super::market::{Line, Odd};
+use crate::domain::entities::{Odd, markets::Line};
 
 #[cfg(test)]
 mod tests;

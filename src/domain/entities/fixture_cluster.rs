@@ -152,15 +152,15 @@ impl FixtureCluster {
         }
     }
 
-    pub fn games(&self) -> Vec<Game> {
-        let mut games: Vec<Game> = self.games.values().map(|game| game.clone()).collect();
-        games.sort_by(|a, b| {
-            let platform_order = |p: &Platform| if *p == Platform::Betano { 0 } else { 1 };
-            platform_order(&a.platform())
-                .cmp(&platform_order(&b.platform()))
-                .then(a.id.cmp(&b.id))
-        });
-        games
+    pub fn games(&self) -> impl Iterator<Item = &Game> {
+        self.games.values().into_iter()
+    }
+
+    pub fn platform_games(&self, platform: &Platform) -> impl Iterator<Item = &Game> {
+        self.games
+            .values()
+            .filter(|g| g.platform() == *platform)
+            .into_iter()
     }
 
     pub fn representative_game(&self) -> Option<&Game> {

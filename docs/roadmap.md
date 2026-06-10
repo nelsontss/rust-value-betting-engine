@@ -166,15 +166,12 @@
 
      14.2 [X] Plugin-style `DataParser` registry for multi-platform support without modifying `BridgeConnector`
 
-15. [ ] Double Chance market type
+15. [X] Double Chance market type
 
-      15.1 [ ] Add `DoubleChanceMarket` struct with 3 selections (1X, 12, X2)
-
-      15.2 [ ] Add `DoubleChance` variant to `Market` enum and `MarketGroup`
-
-      15.3 [ ] Implement `arbitrage_opportunites` for double chance markets
-
-      15.4 [ ] Re-enable typeId=9 parsing in `BetanoParser` mapped to `Market::DoubleChance`
+       15.1 [X] Add `DoubleChanceMarket` struct with 3 selections (1X, 12, X2)
+       15.2 [X] Add `DoubleChance` variant to `Market` enum and `MarketGroup`
+       15.3 [X] Implement `arbitrage_opportunites` for double chance markets
+       15.4 [X] Re-enable typeId=9 parsing in `BetanoParser` mapped to `Market::DoubleChance`
 
 16. [X] LeBull platform integration
 
@@ -190,7 +187,8 @@
 
       16.6 [ ] Add `DoubleChance` market variant (blocked on 15) and map stakeType 37
 
-      16.7 [ ] Evaluate stakeType 80, 356, 545, 702, 724, 144, 176415, 183254, 217797, 313638, 313639, 357318 (unmapped types in full request)
+       16.7 [X] Update `UPCOMING_URL` with `leagueTimeFilter=14` and full stakeType list from website
+       16.8 [ ] Evaluate stakeType 80, 356, 545, 702, 724, 144, 176415, 183254, 217797, 313638, 313639, 357318 (unmapped types in full request)
 
 17. [X] Async runtime migration
 
@@ -242,4 +240,13 @@
 
       21.3 [X] Add tests for `ParserRegistry`: registration, dispatch, unknown platform
 
-      21.4 [X] Add tests for `Platform` enum: variants, serde round-trip
+       21.4 [X] Add tests for `Platform` enum: variants, serde round-trip
+
+22. [X] Frontend routing and games pages
+
+       22.1 [X] Add `@tanstack/react-router` with code-based route tree
+       22.2 [X] Create root layout with sticky navigation bar (Clusters / Games links)
+       22.3 [X] Add `/games` route rendering all games in a grid
+       22.4 [X] Add `/games/$platform` route for platform-filtered games view
+       22.5 [X] Create `useGames` and `usePlatformGames` hooks with TanStack Query
+       22.6 [X] Add platform badge links for navigation between all games and platform views

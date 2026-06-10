@@ -8,6 +8,7 @@ use chrono::NaiveDateTime;
 use tokio::sync::broadcast::{self, Receiver};
 
 use crate::domain::{
+    Platform,
     entities::{Arbitrage, FixtureCluster, Game},
     services::cluster_service::ClusterServiceErrors::ClusterNotFound,
 };
@@ -156,6 +157,20 @@ impl ClusterService {
 
     pub fn subscribe_to_game_updates(&self) -> Receiver<Arc<FixtureCluster>> {
         self.event_tx.subscribe()
+    }
+
+    pub fn get_games(&self) -> impl Iterator<Item = &Game> {
+        self.clusters.values().flat_map(|c| {
+            c.values()
+                .flat_map(|fixture_cluster| fixture_cluster.games())
+        })
+    }
+
+    pub fn get_plaftorm_games(&self, platform: &Platform) -> impl Iterator<Item = &Game> {
+        self.clusters.values().flat_map(|c| {
+            c.values()
+                .flat_map(|fixture_cluster| fixture_cluster.platform_games(platform))
+        })
     }
 }
 

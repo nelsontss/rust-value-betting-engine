@@ -1,8 +1,8 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::domain::entities::{
-    Arbitrage, FixtureCluster, Game, Line, Market, MarketGroup, MarketType, MoneylineMarket, Odd,
-    Platform, TotalMarket,
+    Arbitrage, FixtureCluster, Game, Market, MarketGroup, MarketType, Odd, Platform,
+    markets::{Line, moneyline::MoneylineMarket, total::TotalMarket},
 };
 
 fn fixture_date(hour: u32, min: u32) -> NaiveDateTime {
@@ -28,7 +28,7 @@ fn moneyline_market(id: &str, home: f64, away: f64) -> (MarketType, Market) {
     (
         MarketType::Moneyline,
         Market::Moneyline(MoneylineMarket::new(
-            id,
+            id.to_string(),
             Odd::new(home).unwrap(),
             Odd::new(away).unwrap(),
         )),
@@ -41,7 +41,7 @@ fn total_market(id: &str, line: f32, over: f64, under: f64) -> (MarketType, Mark
             line: (line * 100.0) as i32,
         },
         Market::Total(TotalMarket::new(
-            id,
+            id.to_string(),
             Line(line),
             Odd::new(over).unwrap(),
             Odd::new(under).unwrap(),

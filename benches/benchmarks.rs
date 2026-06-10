@@ -146,6 +146,11 @@ fn betano_json_event(id: &str, home: &str, away: &str, type_ids: &[i64]) -> serd
                     json!({"price": 3.2}),
                     json!({"price": 4.0}),
                 ],
+                9 => vec![
+                    json!({"price": 1.8}),
+                    json!({"price": 2.1}),
+                    json!({"price": 1.5}),
+                ],
                 10 | 13 | 14 => vec![json!({"price": 1.8}), json!({"price": 2.1})],
                 _ => vec![json!({"price": 2.0})],
             };

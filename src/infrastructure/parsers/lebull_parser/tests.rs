@@ -49,21 +49,23 @@ fn league(country: &str, league_name: &str, games: Vec<serde_json::Value>) -> se
     })
 }
 
-fn count_by_type(markets: &[Market]) -> (usize, usize, usize, usize) {
+fn count_by_type(markets: &[Market]) -> (usize, usize, usize, usize, usize) {
     let mut match_result = 0;
     let mut moneyline = 0;
     let mut total = 0;
     let mut asian = 0;
+    let mut double_chance = 0;
     for m in markets {
         match m {
             Market::MatchResult(_) => match_result += 1,
             Market::Moneyline(_) => moneyline += 1,
             Market::Total(_) => total += 1,
             Market::AsianHandicap(_) => asian += 1,
+            Market::DoubleChance(_) => double_chance += 1,
             _ => {}
         }
     }
-    (match_result, moneyline, total, asian)
+    (match_result, moneyline, total, asian, double_chance)
 }
 
 #[test]
@@ -104,7 +106,8 @@ fn parse_data_parses_1x2_market() {
     assert_eq!(games[0].home_team(), "FC Porto");
     assert_eq!(games[0].away_team(), "SL Benfica");
     assert_eq!(games[0].platform(), Platform::LeBull);
-    let (mr, ml, t, ah) = count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
+    let (mr, ml, t, ah, _dc) =
+        count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(mr, 1);
     assert_eq!(ml, 0);
     assert_eq!(t, 0);
@@ -130,7 +133,7 @@ fn parse_data_parses_asian_handicap_market() {
 
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let (mr, _ml, _t, ah) =
+    let (mr, _ml, _t, ah, _dc) =
         count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(ah, 1);
     assert_eq!(mr, 0);
@@ -155,7 +158,7 @@ fn parse_data_parses_total_market() {
 
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let (_mr, _ml, t, _ah) =
+    let (_mr, _ml, t, _ah, _dc) =
         count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(t, 1);
 }
@@ -179,9 +182,34 @@ fn parse_data_parses_2way_market_type_26() {
 
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let (_mr, ml, _t, _ah) =
+    let (_mr, ml, _t, _ah, _dc) =
         count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(ml, 1);
+}
+
+#[test]
+fn parse_data_parses_double_chance_market_type_37() {
+    let events = vec![lebull_event(
+        105,
+        "Barcelona",
+        "Real Madrid",
+        vec![json!({
+            "stakeTypeId": 37,
+            "stakes": vec![
+                stake(1, 0.0, 1.5),
+                stake(2, 0.0, 2.6),
+                stake(3, 0.0, 1.8),
+            ],
+        })],
+        false,
+    )];
+    let data = json!([league("Spain", "La Liga", events)]);
+
+    let games = LeBullParser::parse_data(data);
+    assert_eq!(games.len(), 1);
+    let (_mr, _ml, _t, _ah, dc) =
+        count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
+    assert_eq!(dc, 1);
 }
 
 #[test]
@@ -203,7 +231,7 @@ fn parse_data_parses_2way_market_type_274556() {
 
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let (_mr, ml, _t, _ah) =
+    let (_mr, ml, _t, _ah, _dc) =
         count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(ml, 1);
 }
@@ -329,7 +357,8 @@ fn parse_data_with_total_market_multiple_lines() {
 
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let (_, _, t, _) = count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
+    let (_, _, t, _, _) =
+        count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(t, 2);
 }
 
@@ -354,7 +383,8 @@ fn parse_data_with_asian_handicap_multiple_lines() {
 
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let (_, _, _, ah) = count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
+    let (_, _, _, ah, _) =
+        count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(ah, 2);
 }
 

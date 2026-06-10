@@ -20,7 +20,7 @@ impl From<&Arc<FixtureCluster>> for ClusterResponse {
             representative_game: c
                 .representative_game()
                 .and_then(|game| Some(GameResponse::from(game))),
-            games: c.games().iter().map(GameResponse::from).collect(),
+            games: c.games().into_iter().map(GameResponse::from).collect(),
             updated_at: c.updated_at().to_rfc3339(),
         }
     }

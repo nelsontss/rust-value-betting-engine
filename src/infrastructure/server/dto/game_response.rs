@@ -22,6 +22,11 @@ pub enum MarketResponse {
         home: OddResponse,
         away: OddResponse,
     },
+    DoubleChance {
+        home_or_draw: OddResponse,
+        home_or_away: OddResponse,
+        draw_or_away: OddResponse,
+    },
     Total {
         line: f32,
         over: OddResponse,
@@ -50,6 +55,11 @@ impl From<&Market> for MarketResponse {
             Market::Moneyline(m) => MarketResponse::Moneyline {
                 home: (&m.home).into(),
                 away: (&m.away).into(),
+            },
+            Market::DoubleChance(m) => MarketResponse::DoubleChance {
+                home_or_draw: (&m.home_or_draw).into(),
+                home_or_away: (&m.home_or_away).into(),
+                draw_or_away: (&m.draw_or_away).into(),
             },
             Market::Total(m) => MarketResponse::Total {
                 line: m.line.0,

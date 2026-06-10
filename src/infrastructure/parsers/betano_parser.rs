@@ -114,6 +114,31 @@ impl BetanoParser {
                                 }
                             }
                         }
+                        // Double Chance (Hipótese Dupla) — selections: 1X, X2, 12
+                        9 => {
+                            if selections.len() >= 3 {
+                                let home_or_draw = selections[0]
+                                    .get("price")
+                                    .and_then(|p| p.as_f64())
+                                    .unwrap_or(0.0);
+                                let draw_or_away = selections[1]
+                                    .get("price")
+                                    .and_then(|p| p.as_f64())
+                                    .unwrap_or(0.0);
+                                let home_or_away = selections[2]
+                                    .get("price")
+                                    .and_then(|p| p.as_f64())
+                                    .unwrap_or(0.0);
+                                if let Ok(m) = Market::double_chance(
+                                    market_id,
+                                    home_or_draw,
+                                    home_or_away,
+                                    draw_or_away,
+                                ) {
+                                    parsed_markets.push(m);
+                                }
+                            }
+                        }
                         // Over/Under Goals
                         13 => {
                             if selections.len() >= 2 {

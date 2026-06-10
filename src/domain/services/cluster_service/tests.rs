@@ -2,7 +2,10 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::domain::{
     Platform,
-    entities::{Arbitrage, Game, Line, Market, Odd, TotalMarket},
+    entities::{
+        Arbitrage, Game, Market, Odd,
+        markets::{Line, total::TotalMarket},
+    },
     services::cluster_service::ClusterService,
 };
 
@@ -128,7 +131,7 @@ fn porto_benfica_with_markets(platform: Platform, markets: Vec<Market>) -> Game 
 
 fn total_market(id: &str, line: f32, over: f64, under: f64) -> Market {
     Market::Total(TotalMarket::new(
-        id,
+        id.to_string(),
         Line(line),
         Odd::new(over).unwrap(),
         Odd::new(under).unwrap(),

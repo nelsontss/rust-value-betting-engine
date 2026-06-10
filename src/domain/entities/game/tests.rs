@@ -2,8 +2,9 @@ use super::Game;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::domain::entities::{
-    market::{Line, Market, MarketType, MoneylineMarket, Odd, TotalMarket},
-    Platform,
+    Odd, Platform,
+    market::{Market, MarketType},
+    markets::{Line, moneyline::MoneylineMarket, total::TotalMarket},
 };
 
 const DEFAULT_COUNTRY: &str = "Portugal";
@@ -74,7 +75,7 @@ fn assert_not_same_fixture_with_context(
 
 fn moneyline_market(id: &str, home: f64, away: f64) -> Market {
     Market::Moneyline(MoneylineMarket::new(
-        id,
+        id.to_string(),
         Odd::new(home).unwrap(),
         Odd::new(away).unwrap(),
     ))
@@ -82,7 +83,7 @@ fn moneyline_market(id: &str, home: f64, away: f64) -> Market {
 
 fn total_market(id: &str, line: f32, over: f64, under: f64) -> Market {
     Market::Total(TotalMarket::new(
-        id,
+        id.to_string(),
         Line(line),
         Odd::new(over).unwrap(),
         Odd::new(under).unwrap(),
