@@ -33,6 +33,8 @@ function marketKey(market: Market): string {
       return "MatchResult"
     case "Moneyline":
       return "Moneyline"
+    case "DoubleChance":
+      return "DoubleChance"
     case "Total":
       return `Total@${market.line}`
     case "Handicap":
@@ -48,6 +50,8 @@ function marketLabel(market: Market): string {
       return "Match Result"
     case "Moneyline":
       return "Moneyline"
+    case "DoubleChance":
+      return "Double Chance"
     case "Total":
       return `Total O/U ${market.line}`
     case "Handicap":

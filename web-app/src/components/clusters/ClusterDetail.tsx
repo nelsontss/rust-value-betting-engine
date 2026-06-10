@@ -11,7 +11,9 @@ interface ClusterDetailProps {
 export function ClusterDetail({ cluster }: ClusterDetailProps) {
   const rep = cluster.representative_game
   const platforms = [...new Set(cluster.games.map((g) => g.platform))]
-  const groups = groupMarkets(cluster.games)
+  const groups = groupMarkets(cluster.games).filter(
+    (g) => new Set(g.items.map((i) => i.platform)).size >= 2,
+  )
 
   return (
     <div className="space-y-6 p-4">

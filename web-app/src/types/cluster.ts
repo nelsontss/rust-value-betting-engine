@@ -19,6 +19,7 @@ export interface Game {
 export type Market =
   | { type: "MatchResult"; home: Odd; draw: Odd; away: Odd }
   | { type: "Moneyline"; home: Odd; away: Odd }
+  | { type: "DoubleChance"; home_or_draw: Odd; home_or_away: Odd; draw_or_away: Odd }
   | { type: "Total"; line: number; over: Odd; under: Odd }
   | { type: "Handicap"; line: number; home: Odd; draw: Odd; away: Odd }
   | { type: "AsianHandicap"; line: number; home: Odd; away: Odd }

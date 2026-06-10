@@ -54,12 +54,16 @@ function getHeaders(market: Market): string[] {
       return ["1", "X", "2"]
     case "Moneyline":
       return ["1", "2"]
+    case "DoubleChance":
+      return ["1X", "12", "X2"]
     case "Total":
       return ["Over", "Under"]
     case "Handicap":
       return ["1", "X", "2"]
     case "AsianHandicap":
       return ["Home", "Away"]
+    default:
+      return []
   }
 }
 
@@ -69,11 +73,15 @@ function getValues(market: Market): number[] {
       return [market.home.value, market.draw.value, market.away.value]
     case "Moneyline":
       return [market.home.value, market.away.value]
+    case "DoubleChance":
+      return [market.home_or_draw.value, market.home_or_away.value, market.draw_or_away.value]
     case "Total":
       return [market.over.value, market.under.value]
     case "Handicap":
       return [market.home.value, market.draw.value, market.away.value]
     case "AsianHandicap":
       return [market.home.value, market.away.value]
+    default:
+      return []
   }
 }

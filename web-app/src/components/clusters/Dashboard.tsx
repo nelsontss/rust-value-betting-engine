@@ -16,7 +16,7 @@ export function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen text-muted-foreground">
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] text-muted-foreground">
         Loading clusters...
       </div>
     )
@@ -24,15 +24,15 @@ export function Dashboard() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen text-destructive">
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] text-destructive">
         Failed to load clusters: {(error as Error).message}
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <>
+      <header className="sticky top-14 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between px-4 h-14">
           <h1 className="text-lg font-semibold">Clusters Dashboard</h1>
           <span className="text-sm text-muted-foreground">
@@ -43,7 +43,7 @@ export function Dashboard() {
 
       {selectedCluster ? (
         <div className="relative">
-          <div className="sticky top-14 z-10 flex items-center gap-2 border-b bg-background/95 backdrop-blur px-4 py-2">
+          <div className="sticky top-28 z-10 flex items-center gap-2 border-b bg-background/95 backdrop-blur px-4 py-2">
             <Button
               variant="ghost"
               size="sm"
@@ -61,6 +61,6 @@ export function Dashboard() {
       ) : (
         <ClusterGrid clusters={clusters ?? []} />
       )}
-    </div>
+    </>
   )
 }

@@ -35,7 +35,9 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
   const rep = cluster.representative_game
   const platforms = [...new Set(cluster.games.map((g) => g.platform))]
   const timeAgo = getTimeAgo(cluster.updated_at)
-  const groups = groupMarkets(cluster.games)
+  const groups = groupMarkets(cluster.games).filter(
+    (g) => new Set(g.items.map((i) => i.platform)).size >= 2,
+  )
 
   return (
     <Card
