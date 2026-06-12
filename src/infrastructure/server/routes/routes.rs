@@ -6,7 +6,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     domain::ClusterService,
-    infrastructure::server::routes::{clusters, games},
+    infrastructure::server::routes::{clusters, games, platforms},
 };
 
 pub fn build_router(cluster_service: Arc<RwLock<ClusterService>>) -> Router {
@@ -21,6 +21,7 @@ pub fn build_router(cluster_service: Arc<RwLock<ClusterService>>) -> Router {
         .route("/sse/clusters", get(clusters::sse_get))
         .route("/games", get(games::get))
         .route("/games/{platform}", get(games::get_by_platform))
+        .route("/platforms", get(platforms::get))
         .layer(cors)
         .with_state(cluster_service)
 }

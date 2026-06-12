@@ -5,9 +5,10 @@ use serde_json::Value;
 #[cfg(test)]
 mod tests;
 
-use crate::domain::entities::Platform;
 use crate::domain::Game;
+use crate::domain::entities::Platform;
 use crate::infrastructure::parsers::betano_parser::BetanoParser;
+use crate::infrastructure::parsers::bwin_parser::BwinParser;
 use crate::infrastructure::parsers::lebull_parser::LeBullParser;
 
 pub trait DataParser: Send {
@@ -26,6 +27,12 @@ impl DataParser for LeBullParser {
     }
 }
 
+impl DataParser for BwinParser {
+    fn parse(&self, data: Value) -> Vec<Game> {
+        BwinParser::parse_data(data)
+    }
+}
+
 pub struct ParserRegistry {
     parsers: HashMap<Platform, Box<dyn DataParser>>,
 }
@@ -37,6 +44,7 @@ impl ParserRegistry {
         };
         registry.register(Platform::Betano, Box::new(BetanoParser::new()));
         registry.register(Platform::LeBull, Box::new(LeBullParser::new()));
+        registry.register(Platform::Bwin, Box::new(BwinParser::new()));
         registry
     }
 

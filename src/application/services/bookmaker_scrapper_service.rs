@@ -4,14 +4,16 @@ use std::thread;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 
-use crate::domain::{ClusterService, Game};
+use crate::domain::{ClusterService, Game, Market};
 use crate::infrastructure::connectors::bridge_connector::BridgeConnector;
+use crate::infrastructure::connectors::bwin_connector::BwinConnector;
 use crate::infrastructure::connectors::lebull_connector::LeBullConnector;
 use crate::shared::error::Result;
 
 pub enum BookmakerEvent {
     Error,
     InsertGames(Vec<Game>),
+    UpdateMarkets((String, Vec<Market>)),
 }
 
 pub trait Connector: Send + Sync {
@@ -35,6 +37,7 @@ impl BookmakerScrapperService {
             connectors: vec![
                 Box::new(BridgeConnector::new()),
                 Box::new(LeBullConnector::new()),
+                Box::new(BwinConnector::new()),
             ],
         }
     }
@@ -51,6 +54,12 @@ impl BookmakerScrapperService {
             match bookmaker_event {
                 BookmakerEvent::InsertGames(games) => {
                     self.cluster_service.write().await.insert_games(games);
+                }
+                BookmakerEvent::UpdateMarkets((game_id, markets)) => {
+                    self.cluster_service
+                        .write()
+                        .await
+                        .insert_markets(&game_id, markets);
                 }
                 BookmakerEvent::Error => (),
             }

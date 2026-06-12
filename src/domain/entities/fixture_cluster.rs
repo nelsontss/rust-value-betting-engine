@@ -89,13 +89,13 @@ impl FixtureCluster {
         }
     }
 
-    pub fn update_markets(&mut self, game_id: String, markets: Vec<&Market>) {
-        if self.games.contains_key(&game_id) {
+    pub fn update_markets(&mut self, game_id: &str, markets: Vec<Market>) {
+        if self.games.contains_key(game_id) {
             self.games
-                .entry(game_id.clone())
+                .entry(game_id.to_string())
                 .and_modify(|g| g.update_markets(markets));
 
-            let game = self.games.get(&game_id).unwrap();
+            let game = self.games.get(game_id).unwrap();
             let market_types = game.markets().keys().cloned().collect::<Vec<_>>();
 
             if game.platform() == FixtureCluster::REPRESENTATIVE_PLATFORM {
@@ -106,7 +106,7 @@ impl FixtureCluster {
                 self.market_type_to_game_ids
                     .entry(market_type.clone())
                     .or_default()
-                    .insert(game_id.clone());
+                    .insert(game_id.to_string());
             }
 
             self.updated_at = chrono::Utc::now();

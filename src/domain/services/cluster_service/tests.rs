@@ -634,7 +634,7 @@ fn insert_games_updates_existing_cluster_and_returns_new_arbitrage() {
 
     let mut updated_second_game = second_game;
 
-    updated_second_game.update_markets(vec![&total_market("betclic-total", 2.5, 1.8, 2.15)]);
+    updated_second_game.update_markets(vec![total_market("betclic-total", 2.5, 1.8, 2.15)]);
 
     let arbitrages = cluster_service.insert_games(vec![updated_second_game]);
 

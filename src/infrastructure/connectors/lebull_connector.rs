@@ -15,12 +15,13 @@ impl Connector for LeBullConnector {
         let registry = ParserRegistry::new();
 
         loop {
-            match ureq::get(LeBullConnector::UPCOMING_URL)
+            match reqwest::blocking::Client::new()
+                .get(LeBullConnector::UPCOMING_URL)
                 .header("x-auth-tenant-id", LeBullConnector::X_AUTH_TENANT_ID)
-                .call()
+                .send()
             {
                 Ok(response) => {
-                    if let Ok(json) = response.into_body().read_json::<serde_json::Value>() {
+                    if let Ok(json) = response.json::<serde_json::Value>() {
                         match registry.parse(&Platform::LeBull, json) {
                             Some(games) => {
                                 let _ = sender.blocking_send(BookmakerEvent::InsertGames(games));

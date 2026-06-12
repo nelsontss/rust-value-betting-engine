@@ -9,7 +9,7 @@ fn today_ms() -> i64 {
 }
 
 #[test]
-fn new_registers_betano_and_lebull_parsers() {
+fn new_registers_all_platform_parsers() {
     let registry = ParserRegistry::new();
     let betano_result = registry.parse(
         &Platform::Betano,
@@ -21,6 +21,10 @@ fn new_registers_betano_and_lebull_parsers() {
     let lebull_result = registry.parse(&Platform::LeBull, json!([]));
     assert!(lebull_result.is_some());
     assert_eq!(lebull_result.unwrap().len(), 0);
+
+    let bwin_result = registry.parse(&Platform::Bwin, json!({"fixtures": []}));
+    assert!(bwin_result.is_some());
+    assert_eq!(bwin_result.unwrap().len(), 0);
 }
 
 #[test]
@@ -64,6 +68,43 @@ fn parse_betano_data_returns_games() {
     assert_eq!(games.len(), 1);
     assert_eq!(games[0].home_team(), "FC Porto");
     assert_eq!(games[0].platform(), Platform::Betano);
+}
+
+#[test]
+fn parse_bwin_data_returns_games() {
+    let registry = ParserRegistry::new();
+    let data = json!({
+        "fixtures": [{
+            "id": "bwin-1",
+            "participants": [
+                {"properties": {"type": "HomeTeam"}, "name": {"value": "FC Porto"}},
+                {"properties": {"type": "AwayTeam"}, "name": {"value": "SL Benfica"}},
+            ],
+            "competition": {"name": {"value": "Liga Portugal"}},
+            "region": {"name": {"value": "Portugal"}},
+            "startDate": "2026-06-12T20:00:00Z",
+            "optionMarkets": [{
+                "id": 100,
+                "status": "Visible",
+                "parameters": [
+                    {"key": "Period", "value": "RegularTime"},
+                    {"key": "MarketType", "value": "3way"},
+                ],
+                "options": [
+                    {"price": {"odds": 2.0}},
+                    {"price": {"odds": 3.2}},
+                    {"price": {"odds": 4.0}},
+                ],
+            }],
+        }]
+    });
+
+    let result = registry.parse(&Platform::Bwin, data);
+    assert!(result.is_some());
+    let games = result.unwrap();
+    assert_eq!(games.len(), 1);
+    assert_eq!(games[0].home_team(), "FC Porto");
+    assert_eq!(games[0].platform(), Platform::Bwin);
 }
 
 #[test]

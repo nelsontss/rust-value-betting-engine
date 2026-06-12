@@ -8,7 +8,7 @@ use chrono::NaiveDateTime;
 use tokio::sync::broadcast::{self, Receiver};
 
 use crate::domain::{
-    Platform,
+    Market, Platform,
     entities::{Arbitrage, FixtureCluster, Game},
     services::cluster_service::ClusterServiceErrors::ClusterNotFound,
 };
@@ -94,15 +94,17 @@ impl ClusterService {
         let mut arbitrages = Vec::new();
 
         games.into_iter().for_each(|game| {
-            let game_id = game.id.clone();
+            let game_id = &game.id;
 
-            if let Some(cluster_id) = self.game_id_to_fixture_cluster_key.get(&game_id) {
+            if let Some(cluster_id) = self.game_id_to_fixture_cluster_key.get(game_id) {
                 self.clusters.entry(game.date).and_modify(|clusters_by_id| {
                     clusters_by_id
                         .entry(cluster_id.clone())
                         .and_modify(|cluster| {
-                            Arc::make_mut(cluster)
-                                .update_markets(game_id.clone(), game.markets().values().collect());
+                            Arc::make_mut(cluster).update_markets(
+                                game_id,
+                                game.markets().values().cloned().collect(),
+                            );
 
                             if cluster.game_count() > 1 {
                                 let _ = self.event_tx.send(cluster.clone());
@@ -124,6 +126,20 @@ impl ClusterService {
         });
 
         arbitrages
+    }
+
+    pub fn insert_markets(&mut self, game_id: &str, markets: Vec<Market>) -> Vec<Arbitrage> {
+        if let Some(cluster_key) = self.game_id_to_fixture_cluster_key.get(game_id)
+            && let Some(game_date) = self.cluster_id_to_date.get(cluster_key)
+            && let Some(games_on_date) = self.clusters.get_mut(game_date)
+            && let Some(cluster) = games_on_date.get_mut(cluster_key)
+        {
+            Arc::make_mut(cluster).update_markets(game_id, markets);
+
+            return cluster.arbitrage_opportunites();
+        }
+
+        vec![]
     }
 
     pub fn get_clusters(&self) -> Vec<Arc<FixtureCluster>> {

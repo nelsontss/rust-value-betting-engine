@@ -146,15 +146,15 @@ impl Game {
             + (away_team_similarity * SimilarityWeights::AWAY_TEAM)
     }
 
-fn normalize_name(name: &str) -> String {
-    let binding = deunicode(name).to_lowercase();
-    let tokens: Vec<&str> = binding.split_whitespace().map(resolve_alias).collect();
-    tokens
-        .into_iter()
-        .filter(|token| !is_weak_token(token))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+    fn normalize_name(name: &str) -> String {
+        let binding = deunicode(name).to_lowercase();
+        let tokens: Vec<&str> = binding.split_whitespace().map(resolve_alias).collect();
+        tokens
+            .into_iter()
+            .filter(|token| !is_weak_token(token))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 
     pub fn canonical_name(&self) -> String {
         format!(
@@ -165,11 +165,11 @@ fn normalize_name(name: &str) -> String {
         )
     }
 
-    pub fn update_markets(&mut self, markets: Vec<&Market>) {
+    pub fn update_markets(&mut self, markets: Vec<Market>) {
         markets.into_iter().for_each(|market| {
             let market_type = MarketType::from(&market);
 
-            self.markets.entry(market_type).insert_entry(market.clone());
+            self.markets.entry(market_type).insert_entry(market);
         });
     }
 

@@ -295,7 +295,7 @@ fn build_market_group_includes_market_types_added_after_game_is_clustered() {
             .is_ok()
     );
 
-    cluster.update_markets(game_id, vec![&added_total_market]);
+    cluster.update_markets(&game_id, vec![added_total_market.clone()]);
 
     assert_total_group(
         &cluster,
@@ -368,7 +368,7 @@ fn update_markets_ignores_unknown_game_id() {
 
     let mut cluster = FixtureCluster::new(game.clone());
 
-    cluster.update_markets("missing-game".to_string(), vec![&added_total_market]);
+    cluster.update_markets("missing-game", vec![added_total_market]);
 
     assert_eq!(1, cluster.game_count());
     assert!(
@@ -394,7 +394,7 @@ fn update_markets_does_not_duplicate_game_ids_for_existing_market_type() {
 
     let mut cluster = FixtureCluster::new(game);
 
-    cluster.update_markets(game_id.clone(), vec![&updated_moneyline]);
+    cluster.update_markets(&game_id, vec![updated_moneyline.clone()]);
 
     let game_ids = cluster
         .market_type_to_game_ids
