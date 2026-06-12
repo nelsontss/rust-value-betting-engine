@@ -1,13 +1,12 @@
 import { Link } from "@tanstack/react-router"
-import { useGames } from "@/hooks/useGames"
+import { useGames, usePlatforms } from "@/hooks/useGames"
 import { GameCard } from "./GameCard"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 
-const ALL_PLATFORMS = ["betano", "lebull"]
-
 export function GamesPage() {
   const { data: games, isLoading, error } = useGames()
+  const { data: platforms } = usePlatforms()
 
   if (isLoading) {
     return (
@@ -35,7 +34,7 @@ export function GamesPage() {
               {games?.length ?? 0} games
             </span>
             <div className="flex gap-1 ml-2">
-              {ALL_PLATFORMS.map((platform) => (
+              {platforms.map((platform) => (
                 <Link key={platform} to="/games/$platform" params={{ platform }}>
                   <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80 text-xs">
                     {platform}

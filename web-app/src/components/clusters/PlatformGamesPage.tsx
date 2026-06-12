@@ -1,16 +1,15 @@
 import { Link, useParams } from "@tanstack/react-router"
-import { usePlatformGames } from "@/hooks/useGames"
+import { usePlatformGames, usePlatforms } from "@/hooks/useGames"
 import { GameCard } from "./GameCard"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 
-const ALL_PLATFORMS = ["betano", "lebull"]
-
 export function PlatformGamesPage() {
   const { platform } = useParams({ from: "/games/$platform" })
   const { data: games, isLoading, error } = usePlatformGames(platform)
+  const { data: platforms } = usePlatforms()
 
   if (isLoading) {
     return (
@@ -46,7 +45,7 @@ export function PlatformGamesPage() {
               {games?.length ?? 0} games
             </span>
             <div className="flex gap-1 ml-2">
-              {ALL_PLATFORMS.map((p) => (
+              {platforms.map((p) => (
                 <Link key={p} to="/games/$platform" params={{ platform: p }}>
                   <Badge
                     variant={p === platform ? "default" : "secondary"}

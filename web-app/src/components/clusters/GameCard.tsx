@@ -10,6 +10,7 @@ export function GameCard({ game }: GameCardProps) {
   const platformColors: Record<string, string> = {
     betano: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
     lebull: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+    bwin: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300",
   }
 
   return (
