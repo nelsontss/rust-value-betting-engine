@@ -1,4 +1,5 @@
 mod clusters;
 mod games;
-pub mod platforms;
+mod market_history;
+mod platforms;
 pub mod routes;

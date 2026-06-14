@@ -39,17 +39,22 @@ fn game(
 fn assert_cluster_sizes(cluster_service: &ClusterService, expected_sizes: &[usize]) {
     let total_clusters: usize = cluster_service
         .clusters
-        .values()
-        .flat_map(|clusters_by_key| clusters_by_key.values())
-        .count();
+        .iter()
+        .map(|clusters_by_key_ref| clusters_by_key_ref.value().iter().count())
+        .sum();
 
     assert_eq!(expected_sizes.len(), total_clusters);
 
     let mut cluster_sizes: Vec<usize> = cluster_service
         .clusters
-        .values()
-        .flat_map(|clusters_by_key| clusters_by_key.values())
-        .map(|cluster| cluster.game_count())
+        .iter()
+        .flat_map(|clusters_by_key_ref| {
+            clusters_by_key_ref
+                .value()
+                .iter()
+                .map(|cluster_ref| cluster_ref.game_count())
+                .collect::<Vec<usize>>()
+        })
         .collect();
 
     cluster_sizes.sort_unstable();
@@ -150,7 +155,7 @@ fn clusters_games_by_similarity_when_they_are_fully_equal() {
         arsenal_burnley(Platform::Betano),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
     cluster_service.add_games(games);
 
     assert_cluster_sizes(&cluster_service, &[2, 2, 3]);
@@ -168,7 +173,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_names() {
         fuzzy_england_game("Man United", "Arsenal", Platform::Betano),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(games);
 
@@ -234,7 +239,7 @@ fn clusters_games_by_similarity_with_fuzzy_competition_names() {
         ),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(games);
 
@@ -300,7 +305,7 @@ fn clusters_games_by_similarity_with_fuzzy_country_names() {
         ),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(games);
 
@@ -375,7 +380,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_competition_names() {
         ),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(games);
 
@@ -450,7 +455,7 @@ fn clusters_games_by_similarity_with_fuzzy_team_and_country_names() {
         ),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(games);
 
@@ -525,7 +530,7 @@ fn clusters_games_by_similarity_with_combined_fuzzy_names() {
         ),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(games);
 
@@ -573,7 +578,7 @@ fn keeps_distinct_fixtures_separate_when_country_competition_and_date_match() {
         ),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(games);
 
@@ -612,7 +617,7 @@ fn keeps_games_separate_when_only_one_team_side_matches() {
         ),
     ];
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(games);
 
@@ -628,7 +633,7 @@ fn insert_games_updates_existing_cluster_and_returns_new_arbitrage() {
     let second_game = porto_benfica_with_markets(Platform::Betano, vec![]);
     let second_game_id = second_game.id.clone();
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(vec![first_game, second_game.clone()]);
 
@@ -660,7 +665,7 @@ fn insert_games_adds_unknown_game_to_existing_cluster_and_returns_arbitrage() {
     );
     let new_game_id = new_game.id.clone();
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(vec![first_game]);
 
@@ -682,7 +687,7 @@ fn insert_games_creates_new_cluster_for_unknown_distinct_fixture() {
     let new_game = sporting_braga(Platform::Betano);
     let new_game_id = new_game.id.clone();
 
-    let mut cluster_service = ClusterService::new();
+    let cluster_service = ClusterService::new();
 
     cluster_service.add_games(vec![first_game]);
 

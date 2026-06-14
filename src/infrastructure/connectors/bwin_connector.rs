@@ -125,7 +125,8 @@ impl BwinConnector {
                                     continue;
                                 }
                                 if part == "{}" && !subscribed {
-                                    ws.send(Message::Text(subscribe_msg.clone())).unwrap();
+                                    ws.send(Message::Text(subscribe_msg.clone().into()))
+                                        .unwrap();
                                     subscribed = true;
                                     continue;
                                 }

@@ -1,11 +1,13 @@
+use serde::Serialize;
+
 use crate::domain::{
     OddError,
     entities::{
         Odd,
         markets::{
             Line, asian_handicap::AsianHandicapMarket, double_chance::DoubleChanceMarket,
-            handicap::HandicapMarket, match_result::MatchResultMarket,
-            moneyline::MoneylineMarket, total::TotalMarket,
+            handicap::HandicapMarket, match_result::MatchResultMarket, moneyline::MoneylineMarket,
+            total::TotalMarket,
         },
     },
 };
@@ -92,7 +94,7 @@ impl Market {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub enum MarketType {
     MatchResult,
     Moneyline,

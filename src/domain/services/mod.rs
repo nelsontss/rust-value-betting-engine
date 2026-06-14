@@ -1,3 +1,2 @@
-mod cluster_service;
-
-pub use cluster_service::ClusterService;
+pub mod cluster_service;
+pub mod market_history_service;

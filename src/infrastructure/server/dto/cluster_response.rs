@@ -19,8 +19,12 @@ impl From<&Arc<FixtureCluster>> for ClusterResponse {
             id: c.key(),
             representative_game: c
                 .representative_game()
-                .and_then(|game| Some(GameResponse::from(game))),
-            games: c.games().into_iter().map(GameResponse::from).collect(),
+                .and_then(|game| Some(GameResponse::from(game.clone()))),
+            games: c
+                .games()
+                .into_iter()
+                .map(|g| GameResponse::from(g.clone()))
+                .collect(),
             updated_at: c.updated_at().to_rfc3339(),
         }
     }

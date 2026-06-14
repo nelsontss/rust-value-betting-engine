@@ -170,6 +170,10 @@ impl FixtureCluster {
     pub fn updated_at(&self) -> DateTime<Utc> {
         self.updated_at.clone()
     }
+
+    pub fn get_game(&self, game_id: &str) -> Option<&Game> {
+        self.games.get(game_id)
+    }
 }
 
 impl<'a> fmt::Display for FixtureCluster {

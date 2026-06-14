@@ -6,4 +6,4 @@ pub use entities::Game;
 pub use entities::Market;
 pub use entities::OddError;
 pub use entities::Platform;
-pub use services::ClusterService;
+pub use services::cluster_service::ClusterService;

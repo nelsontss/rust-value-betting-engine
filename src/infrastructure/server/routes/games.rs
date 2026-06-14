@@ -5,21 +5,18 @@ use axum::{
     extract::{Path, State},
 };
 use axum_macros::debug_handler;
-use tokio::sync::RwLock;
 
 use crate::{
-    domain::{ClusterService, Platform},
-    infrastructure::server::dto::game_response::GameResponse,
+    domain::Platform,
+    infrastructure::server::{dto::game_response::GameResponse, routes::routes::AppState},
 };
 
 #[debug_handler]
-pub async fn get(
-    State(cluster_service): State<Arc<RwLock<ClusterService>>>,
-) -> Json<Vec<GameResponse>> {
-    let response: Vec<GameResponse> = cluster_service
-        .read()
-        .await
+pub async fn get(State(app_state): State<Arc<AppState>>) -> Json<Vec<GameResponse>> {
+    let response: Vec<GameResponse> = app_state
+        .cluster_service
         .get_games()
+        .into_iter()
         .map(|g| GameResponse::from(g))
         .collect();
     Json(response)
@@ -27,13 +24,13 @@ pub async fn get(
 
 #[debug_handler]
 pub async fn get_by_platform(
-    State(cluster_service): State<Arc<RwLock<ClusterService>>>,
+    State(app_state): State<Arc<AppState>>,
     Path(platform): Path<Platform>,
 ) -> Json<Vec<GameResponse>> {
-    let response: Vec<GameResponse> = cluster_service
-        .read()
-        .await
+    let response: Vec<GameResponse> = app_state
+        .cluster_service
         .get_plaftorm_games(&platform)
+        .into_iter()
         .map(|g| GameResponse::from(g))
         .collect();
     Json(response)

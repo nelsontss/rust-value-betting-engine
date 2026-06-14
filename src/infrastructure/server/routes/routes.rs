@@ -1,15 +1,19 @@
 use std::sync::Arc;
 
 use axum::{Router, http::Method, routing::get};
-use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
-    domain::ClusterService,
-    infrastructure::server::routes::{clusters, games, platforms},
+    domain::{ClusterService, services::market_history_service::MarketHistoryService},
+    infrastructure::server::routes::{clusters, games, market_history, platforms},
 };
 
-pub fn build_router(cluster_service: Arc<RwLock<ClusterService>>) -> Router {
+pub struct AppState {
+    pub cluster_service: Arc<ClusterService>,
+    pub market_history_service: Arc<MarketHistoryService>,
+}
+
+pub fn build_router(app_state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET])
@@ -22,6 +26,11 @@ pub fn build_router(cluster_service: Arc<RwLock<ClusterService>>) -> Router {
         .route("/games", get(games::get))
         .route("/games/{platform}", get(games::get_by_platform))
         .route("/platforms", get(platforms::get))
+        .route("/games/{id}/markets/history", get(market_history::get))
+        .route(
+            "/see/games/{id}/markets/history",
+            get(market_history::sse_get),
+        )
         .layer(cors)
-        .with_state(cluster_service)
+        .with_state(app_state)
 }

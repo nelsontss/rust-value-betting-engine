@@ -4,6 +4,7 @@ mod game;
 mod market;
 pub mod markets;
 mod odd;
+mod odd_data_point;
 mod platform;
 
 pub use arbitrage::Arbitrage;
@@ -18,4 +19,5 @@ pub use market::MarketGroup;
 pub use market::MarketType;
 pub use odd::Odd;
 pub use odd::OddError;
+pub use odd_data_point::MarketDataPoint;
 pub use platform::Platform;

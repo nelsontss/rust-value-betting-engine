@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::thread;
 
-use tokio::sync::RwLock;
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 
 use crate::domain::{ClusterService, Game, Market};
@@ -21,14 +20,14 @@ pub trait Connector: Send + Sync {
 }
 
 pub struct BookmakerScrapperService {
-    cluster_service: Arc<RwLock<ClusterService>>,
+    cluster_service: Arc<ClusterService>,
     tx: Sender<BookmakerEvent>,
     rx: Receiver<BookmakerEvent>,
     connectors: Vec<Box<dyn Connector>>,
 }
 
 impl BookmakerScrapperService {
-    pub fn new(cluster_service: Arc<RwLock<ClusterService>>) -> Self {
+    pub fn new(cluster_service: Arc<ClusterService>) -> Self {
         let (tx, rx) = channel::<BookmakerEvent>(100);
         BookmakerScrapperService {
             cluster_service: cluster_service,
@@ -53,13 +52,10 @@ impl BookmakerScrapperService {
         while let Some(bookmaker_event) = self.rx.recv().await {
             match bookmaker_event {
                 BookmakerEvent::InsertGames(games) => {
-                    self.cluster_service.write().await.insert_games(games);
+                    self.cluster_service.insert_games(games);
                 }
                 BookmakerEvent::UpdateMarkets((game_id, markets)) => {
-                    self.cluster_service
-                        .write()
-                        .await
-                        .insert_markets(&game_id, markets);
+                    self.cluster_service.insert_markets(&game_id, markets);
                 }
                 BookmakerEvent::Error => (),
             }
