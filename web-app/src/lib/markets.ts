@@ -2,6 +2,7 @@ import type { Game, Market } from "@/types/cluster"
 
 export interface MarketGroupItem {
   platform: string
+  gameId: string
   market: Market
 }
 
@@ -21,7 +22,7 @@ export function groupMarkets(games: Game[]): MarketGroup[] {
         group = { key, label: marketLabel(market), items: [] }
         map.set(key, group)
       }
-      group.items.push({ platform: game.platform, market })
+      group.items.push({ platform: game.platform, gameId: game.id, market })
     }
   }
   return [...map.values()]

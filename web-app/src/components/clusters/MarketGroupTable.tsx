@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import type { Market } from "@/types/cluster"
 import type { MarketGroup } from "@/lib/markets"
 import { Badge } from "@/components/ui/badge"
@@ -27,14 +28,21 @@ export function MarketGroupTable({ group, compact }: MarketGroupTableProps) {
         </div>
       </div>
       {group.items.map((item) => (
-        <div key={item.platform} className="flex items-center gap-2">
-          <Badge variant="outline" className="text-[10px] h-4 px-1 font-mono">
-            {item.platform}
-          </Badge>
-          {getValues(item.market).map((v, i) => (
-            <OddsValue key={i} value={v} className={colClass} />
-          ))}
-        </div>
+        <Link
+          key={item.platform}
+          to="/market-history/$gameId"
+          params={{ gameId: item.gameId }}
+          className="block hover:bg-accent/50 rounded transition-colors p-1 -m-1"
+        >
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px] h-4 px-1 font-mono">
+              {item.platform}
+            </Badge>
+            {getValues(item.market).map((v, i) => (
+              <OddsValue key={i} value={v} className={colClass} />
+            ))}
+          </div>
+        </Link>
       ))}
     </div>
   )
