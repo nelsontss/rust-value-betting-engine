@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router"
 import type { Cluster } from "@/types/cluster"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,7 +31,7 @@ const indicatorColors: Record<string, string> = {
 const MAX_GROUPS = 3
 
 export function ClusterCard({ cluster }: ClusterCardProps) {
-  const setSelectedClusterId = useClustersUIStore((s) => s.setSelectedClusterId)
+  const navigate = useNavigate()
   const change = useClustersUIStore((s) => s.clusterChanges[cluster.id])
   const rep = cluster.representative_game
   const platforms = [...new Set(cluster.games.map((g) => g.platform))]
@@ -44,7 +45,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       className={`cursor-pointer transition-all hover:shadow-md ${
         change ? borderStyles[change] : ""
       }`}
-      onClick={() => setSelectedClusterId(cluster.id)}
+      onClick={() => navigate({ to: "/cluster/$key", params: { key: cluster.id } })}
     >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
@@ -90,7 +91,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
         <div className="space-y-2">
           {groups.slice(0, MAX_GROUPS).map((group) => (
-            <div key={group.key} className="rounded-lg border p-2 space-y-1">
+            <div key={group.key} className="rounded-lg border px-2.5 py-2">
               <MarketGroupTable group={group} compact />
             </div>
           ))}

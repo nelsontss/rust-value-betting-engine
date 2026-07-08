@@ -47,7 +47,7 @@ export interface MarketDataPoint {
 
 export interface MarketHistoryResponse {
   game_id: string
-  markets: MarketDataPoint[]
+  markets_by_type: Record<string, MarketDataPoint[]>
 }
 
 export interface MarketDataPointResponse {

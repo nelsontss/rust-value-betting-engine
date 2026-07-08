@@ -1,60 +1,94 @@
+import { useState } from "react"
 import type { Cluster } from "@/types/cluster"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { MarketGroupTable } from "./MarketGroupTable"
+import { MarketChart } from "./MarketChart"
 import { groupMarkets } from "@/lib/markets"
+import { useClusterMarketHistory } from "@/hooks/useClusterMarketHistory"
 
 interface ClusterDetailProps {
   cluster: Cluster
 }
 
 export function ClusterDetail({ cluster }: ClusterDetailProps) {
-  const rep = cluster.representative_game
-  const platforms = [...new Set(cluster.games.map((g) => g.platform))]
-  const groups = groupMarkets(cluster.games).filter(
+  const allGroups = groupMarkets(cluster.games)
+  const groups = allGroups.filter(
     (g) => new Set(g.items.map((i) => i.platform)).size >= 2,
   )
 
-  return (
-    <div className="space-y-6 p-4">
-      <Card>
-        <CardHeader>
-          {rep && (
-            <div className="flex items-start justify-between">
-              <div>
-                <CardTitle className="text-xl">
-                  {rep.home_team} vs {rep.away_team}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {rep.competition} &middot; {rep.country} &middot;{" "}
-                  {new Date(rep.date).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex gap-1">
-                {platforms.map((p) => (
-                  <Badge key={p} variant="secondary">
-                    {p}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-1 text-sm text-muted-foreground">
-          <p>Cluster ID: {cluster.id}</p>
-          <p>Platforms: {cluster.games.length}</p>
-          <p>Last updated: {new Date(cluster.updated_at).toLocaleString()}</p>
-        </CardContent>
-      </Card>
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null)
 
-      <div className="grid gap-4">
+  const selectedGroup = selectedGroupKey
+    ? allGroups.find((g) => g.key === selectedGroupKey) ?? null
+    : null
+
+  const selectedGames = selectedGroup
+    ? cluster.games.filter((g) =>
+        selectedGroup.items.some((i) => i.gameId === g.id),
+      )
+    : []
+
+  const selectedMarketItem = selectedGroup?.items[0]
+  const targetMarket =
+    selectedMarketItem && "line" in selectedMarketItem.market
+      ? { type: selectedMarketItem.market.type, line: selectedMarketItem.market.line }
+      : selectedMarketItem
+        ? { type: selectedMarketItem.market.type }
+        : null
+
+  const gamePlatforms = selectedGames.map((g) => ({
+    id: g.id,
+    platform: g.platform,
+  }))
+
+  const { data: marketHistory, isLoading: historyLoading } =
+    useClusterMarketHistory(selectedGames, targetMarket?.type ?? "")
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+      <div className="space-y-0.5 overflow-y-auto max-h-[calc(100vh-8rem)] px-1">
         {groups.map((group) => (
-          <Card key={group.key}>
-            <CardContent className="pt-4">
-              <MarketGroupTable group={group} />
-            </CardContent>
-          </Card>
+          <div
+            key={group.key}
+            className={`rounded-lg border cursor-pointer transition-colors ${
+              selectedGroupKey === group.key
+                ? "ring-2 ring-primary"
+                : "hover:bg-muted/50"
+            }`}
+            onClick={() => setSelectedGroupKey(group.key)}
+          >
+            <div className="px-2.5 py-2">
+              <MarketGroupTable group={group} compact />
+            </div>
+          </div>
         ))}
+      </div>
+
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Market History</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {selectedGroupKey && targetMarket ? (
+              historyLoading ? (
+                <div className="text-center text-muted-foreground py-8">
+                  Loading market history...
+                </div>
+              ) : marketHistory ? (
+                <MarketChart
+                  data={marketHistory}
+                  targetMarket={targetMarket}
+                  games={gamePlatforms}
+                />
+              ) : null
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                Select a market to view historical odds across platforms
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

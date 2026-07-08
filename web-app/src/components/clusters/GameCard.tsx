@@ -1,9 +1,6 @@
-import { Link } from "@tanstack/react-router"
 import type { Game } from "@/types/cluster"
 import { Badge } from "@/components/ui/badge"
 import { MarketRow } from "./MarketRow"
-import { Button } from "@/components/ui/button"
-import { TrendingUp } from "lucide-react"
 
 interface GameCardProps {
   game: Game
@@ -41,15 +38,6 @@ export function GameCard({ game }: GameCardProps) {
             +{game.markets.length - 3} more markets
           </p>
         )}
-      </div>
-
-      <div className="pt-2 border-t">
-        <Link to="/market-history/$gameId" params={{ gameId: game.id }}>
-          <Button size="sm" variant="secondary" className="w-full">
-            <TrendingUp className="size-3 mr-1" />
-            View Market History
-          </Button>
-        </Link>
       </div>
     </div>
   )

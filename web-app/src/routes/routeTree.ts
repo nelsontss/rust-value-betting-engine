@@ -3,13 +3,13 @@ import { rootRoute } from "./__root"
 import { indexRoute } from "./index"
 import { gamesRoute } from "./games"
 import { platformGamesRoute } from "./games.$platform"
-import { marketHistoryRoute } from "./market-history.$gameId"
+import { clusterRoute } from "./cluster.$key"
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
   gamesRoute,
   platformGamesRoute,
-  marketHistoryRoute,
+  clusterRoute,
 ])
 
 export const router = createRouter({ routeTree })
