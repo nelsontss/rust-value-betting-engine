@@ -176,8 +176,18 @@ impl BwinConnector {
             BwinWSEvent::MainToLiveUpdate { switched_fixtures } => {
                 println!("switched: {:?}", switched_fixtures);
             }
+            BwinWSEvent::OptionMarketDelete {
+                market_id: _,
+                fixture_id: _,
+            } => {
+                eprintln!("Unhandled deleted market - TODO");
+            }
+            BwinWSEvent::ScoreboardSlim {
+                scoreboard: _,
+                fixture_id: _,
+            } => {}
             _ => {
-                eprintln!("Unhandled bwin event")
+                eprintln!("Unhandled bwin event: {:?}", event)
             }
         }
     }

@@ -105,6 +105,28 @@ pub enum MarketType {
 }
 
 impl MarketType {
+    pub fn variant_name(&self) -> &str {
+        match self {
+            MarketType::MatchResult => "MatchResult",
+            MarketType::Moneyline => "Moneyline",
+            MarketType::DoubleChance => "DoubleChance",
+            MarketType::Total { .. } => "Total",
+            MarketType::Handicap { .. } => "Handicap",
+            MarketType::AsianHandicap { .. } => "AsianHandicap",
+        }
+    }
+
+    pub fn to_key_string(&self) -> String {
+        match self {
+            MarketType::MatchResult => "MatchResult".to_string(),
+            MarketType::Moneyline => "Moneyline".to_string(),
+            MarketType::DoubleChance => "DoubleChance".to_string(),
+            MarketType::Total { line } => format!("Total:{}", line),
+            MarketType::Handicap { line } => format!("Handicap:{}", line),
+            MarketType::AsianHandicap { line } => format!("AsianHandicap:{}", line),
+        }
+    }
+
     pub fn from(market: &Market) -> MarketType {
         match market {
             Market::MatchResult(_) => MarketType::MatchResult,

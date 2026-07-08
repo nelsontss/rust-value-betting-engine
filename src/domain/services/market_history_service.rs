@@ -11,7 +11,7 @@ use crate::domain::{
 #[derive(Debug)]
 pub struct MarketHistoryService {
     markets_history: DashMap<String, DashMap<MarketType, Vec<Arc<MarketDataPoint>>>>,
-    event_tx: Sender<Arc<MarketDataPoint>>,
+    event_tx: Sender<(String, Arc<MarketDataPoint>)>,
 }
 
 impl MarketHistoryService {
@@ -19,14 +19,31 @@ impl MarketHistoryService {
         markets.iter().for_each(|(market_type, market)| {
             let market_data_point = Arc::new(MarketDataPoint::new(market.clone()));
 
+            let mut saved = false;
+
             self.markets_history
                 .entry(game_id.to_string())
                 .or_insert_with(DashMap::new)
                 .entry(market_type.clone())
-                .and_modify(|data_points| data_points.push(Arc::clone(&market_data_point)))
-                .or_insert_with(|| vec![Arc::clone(&market_data_point)]);
+                .and_modify(|data_points| {
+                    let latest_data_point_market =
+                        data_points.last().expect("no datapoint in array").market();
 
-            let _ = self.event_tx.send(Arc::clone(&market_data_point));
+                    if latest_data_point_market != market_data_point.market() {
+                        data_points.push(Arc::clone(&market_data_point));
+                        saved = true;
+                    }
+                })
+                .or_insert_with(|| {
+                    saved = true;
+                    vec![Arc::clone(&market_data_point)]
+                });
+
+            if saved {
+                let _ = self
+                    .event_tx
+                    .send((game_id.to_string(), Arc::clone(&market_data_point)));
+            }
         });
     }
 
@@ -51,7 +68,7 @@ impl MarketHistoryService {
         None
     }
 
-    pub fn subscribe_to_game_history_updates(&self) -> Receiver<Arc<MarketDataPoint>> {
+    pub fn subscribe_to_game_history_updates(&self) -> Receiver<(String, Arc<MarketDataPoint>)> {
         self.event_tx.subscribe()
     }
 }

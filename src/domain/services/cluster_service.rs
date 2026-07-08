@@ -139,7 +139,7 @@ impl ClusterService {
                         .unwrap()
                         .value()
                         .get(cluster_id.as_str())
-                        .unwrap()
+                        .unwrap() // TODO: I observed a panic here
                         .value()
                         .arbitrage_opportunites(),
                 );

@@ -129,7 +129,10 @@ impl BwinWSEvent {
                             fixture_id,
                         })
                     }
-                    _ => None,
+                    _ => {
+                        println!("Unhandled signal: {:?}", msg_type);
+                        None
+                    }
                 }
             }
             _ => None,

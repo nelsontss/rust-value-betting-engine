@@ -40,6 +40,7 @@ pub async fn get(
 #[debug_handler]
 pub async fn sse_get(
     State(app_state): State<Arc<AppState>>,
+    Path(game_id): Path<String>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let mut rx = app_state
         .market_history_service
@@ -47,10 +48,11 @@ pub async fn sse_get(
     let stream = async_stream::stream! {
         loop {
             match rx.recv().await {
-                Ok(market_history) => {
-                  let response = MarketDataPointResponse::from(&market_history);
+                Ok((id, market_history)) if id == game_id => {
+                  let response = MarketDataPointResponse::from((id.as_str(), &market_history));
                   yield Ok(Event::default().data(serde_json::to_string(&response).unwrap()))
                 },
+                Ok(_) => continue,
                 Err(RecvError::Lagged(_)) => continue,
                 Err(RecvError::Closed) => break,
             }
