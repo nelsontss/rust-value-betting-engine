@@ -4,12 +4,14 @@ import { indexRoute } from "./index"
 import { gamesRoute } from "./games"
 import { platformGamesRoute } from "./games.$platform"
 import { clusterRoute } from "./cluster.$key"
+import { statisticsRoute } from "./statistics"
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
   gamesRoute,
   platformGamesRoute,
   clusterRoute,
+  statisticsRoute,
 ])
 
 export const router = createRouter({ routeTree })

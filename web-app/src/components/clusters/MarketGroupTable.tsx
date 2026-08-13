@@ -27,7 +27,10 @@ export function MarketGroupTable({ group, compact }: MarketGroupTableProps) {
         </div>
       </div>
       {group.items.map((item) => (
-        <div key={item.platform} className="flex items-center gap-2 py-0.5">
+        <div
+          key={`${item.platform}-${item.gameId}`}
+          className="flex items-center gap-2 py-0.5"
+        >
           <Badge variant="outline" className="text-[10px] h-4 px-1 font-mono">
             {item.platform}
           </Badge>

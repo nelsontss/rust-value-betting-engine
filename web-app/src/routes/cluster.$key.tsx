@@ -19,7 +19,7 @@ function ClusterPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen text-muted-foreground">
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] text-muted-foreground">
         Loading cluster...
       </div>
     )
@@ -27,7 +27,7 @@ function ClusterPage() {
 
   if (error || !cluster) {
     return (
-      <div className="flex items-center justify-center h-screen text-destructive">
+      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] text-destructive">
         Failed to load cluster
       </div>
     )
@@ -37,8 +37,8 @@ function ClusterPage() {
   const platforms = [...new Set(cluster.games.map((g) => g.platform))]
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="sticky top-0 z-10 flex items-center gap-3 border-b bg-background/95 backdrop-blur px-4 py-2 shrink-0">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      <header className="sticky top-14 z-10 flex items-center gap-3 border-b bg-background/95 backdrop-blur px-4 py-2 shrink-0">
         <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/" })}>
           <ArrowLeft className="size-4 mr-1" />
           Back

@@ -45,7 +45,7 @@ export function PlatformGamesPage() {
               {games?.length ?? 0} games
             </span>
             <div className="flex gap-1 ml-2">
-              {platforms.map((p) => (
+              {(platforms ?? []).map((p) => (
                 <Link key={p} to="/games/$platform" params={{ platform: p }}>
                   <Badge
                     variant={p === platform ? "default" : "secondary"}

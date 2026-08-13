@@ -34,7 +34,7 @@ export function GamesPage() {
               {games?.length ?? 0} games
             </span>
             <div className="flex gap-1 ml-2">
-              {platforms.map((platform) => (
+              {(platforms ?? []).map((platform) => (
                 <Link key={platform} to="/games/$platform" params={{ platform }}>
                   <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80 text-xs">
                     {platform}
