@@ -18,11 +18,10 @@ fn setup_socket(
 ) {
     let _ = std::fs::remove_file(path);
     let listener = UnixListener::bind(path).unwrap();
-    let connector = BridgeConnector::new();
     let (tx, rx) = channel(10);
     let path_owned = path.to_string();
     let handle = thread::spawn(move || {
-        let _ = connector.start_at(tx, &path_owned);
+        let _ = BridgeConnector::start_at(tx, &path_owned);
     });
     (listener, rx, handle)
 }
@@ -52,9 +51,8 @@ fn new_creates_bridge_connector() {
 
 #[test]
 fn start_returns_gracefully_when_no_socket() {
-    let connector = BridgeConnector::new();
     let (tx, _rx) = channel(1);
-    let _ = connector.start_at(tx, "/tmp/nonexistent-test-socket.sock");
+    let _ = BridgeConnector::start_at(tx, "/tmp/nonexistent-test-socket.sock");
 }
 
 #[tokio::test]

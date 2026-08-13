@@ -173,24 +173,9 @@ impl BetanoParser {
                                 }
                             }
                         }
-                        // 1st Half Over/Under Goals
-                        14 => {
-                            if selections.len() >= 2 {
-                                let over = selections[0]
-                                    .get("price")
-                                    .and_then(|p| p.as_f64())
-                                    .unwrap_or(0.0);
-                                let under = selections[1]
-                                    .get("price")
-                                    .and_then(|p| p.as_f64())
-                                    .unwrap_or(0.0);
-                                if let Ok(m) =
-                                    Market::total(market_id, handicap as f32, over, under)
-                                {
-                                    parsed_markets.push(m);
-                                }
-                            }
-                        }
+                        // type_id 14 is "1st Half Over/Under Goals" — period is not
+                        // represented in the domain model, so it would be confused with the
+                        // full-time total of the same line; skipped.
                         // type_id 15 is "Both Teams to Score" — not a moneyline market, skipped
                         _ => {}
                     }

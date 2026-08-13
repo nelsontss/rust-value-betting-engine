@@ -92,6 +92,70 @@ impl Market {
             Odd::new(away)?,
         )))
     }
+
+    pub fn odd_for_outcome(&self, outcome: &Outcome) -> Option<Odd> {
+        match self {
+            Market::MatchResult(m) => match outcome {
+                Outcome::Home => Some(m.home),
+                Outcome::Draw => Some(m.draw),
+                Outcome::Away => Some(m.away),
+                _ => None,
+            },
+            Market::Moneyline(m) => match outcome {
+                Outcome::Home => Some(m.home),
+                Outcome::Away => Some(m.away),
+                _ => None,
+            },
+            Market::DoubleChance(m) => match outcome {
+                Outcome::HomeOrDraw => Some(m.home_or_draw),
+                Outcome::HomeOrAway => Some(m.home_or_away),
+                Outcome::DrawOrAway => Some(m.draw_or_away),
+                _ => None,
+            },
+            Market::Total(m) => match outcome {
+                Outcome::Over => Some(m.over),
+                Outcome::Under => Some(m.under),
+                _ => None,
+            },
+            Market::Handicap(m) => match outcome {
+                Outcome::Home => Some(m.home),
+                Outcome::Draw => Some(m.draw),
+                Outcome::Away => Some(m.away),
+                _ => None,
+            },
+            Market::AsianHandicap(m) => match outcome {
+                Outcome::Home => Some(m.home),
+                Outcome::Away => Some(m.away),
+                _ => None,
+            },
+        }
+    }
+
+    pub fn sum_implied_probabilities(&self) -> f64 {
+        let market_type = MarketType::from(self);
+
+        market_type
+            .outcomes()
+            .iter()
+            .map(|outcome| {
+                self.odd_for_outcome(outcome)
+                    .expect("Outcome not in market")
+                    .get_implied_probability()
+            })
+            .sum()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+pub enum Outcome {
+    Home,
+    Draw,
+    Away,
+    Over,
+    Under,
+    HomeOrDraw,
+    HomeOrAway,
+    DrawOrAway,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
@@ -141,6 +205,21 @@ impl MarketType {
             Market::Handicap(market) => MarketType::Handicap {
                 line: market.line.key(),
             },
+        }
+    }
+
+    pub fn outcomes(&self) -> Vec<Outcome> {
+        match self {
+            MarketType::MatchResult => vec![Outcome::Home, Outcome::Draw, Outcome::Away],
+            MarketType::Moneyline => vec![Outcome::Home, Outcome::Away],
+            MarketType::DoubleChance => vec![
+                Outcome::HomeOrDraw,
+                Outcome::HomeOrAway,
+                Outcome::DrawOrAway,
+            ],
+            MarketType::Total { .. } => vec![Outcome::Over, Outcome::Under],
+            MarketType::Handicap { .. } => vec![Outcome::Home, Outcome::Draw, Outcome::Away],
+            MarketType::AsianHandicap { .. } => vec![Outcome::Home, Outcome::Away],
         }
     }
 }

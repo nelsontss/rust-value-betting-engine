@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::{self},
     sync::Arc,
 };
@@ -9,9 +10,10 @@ use tokio::sync::broadcast::{self, Receiver};
 
 use crate::domain::{
     Market, Platform,
-    entities::{Arbitrage, FixtureCluster, Game},
+    entities::{Arbitrage, FixtureCluster, Game, MarketType, Outcome},
     services::{
         cluster_service::ClusterServiceErrors::ClusterNotFound,
+        cluster_statistics::{ClusterStatistics, StatisticsValues},
         market_history_service::MarketHistoryService,
     },
 };
@@ -25,6 +27,7 @@ pub struct ClusterService {
     cluster_id_to_date: DashMap<String, NaiveDateTime>,
     clusters: DashMap<NaiveDateTime, DashMap<String, Arc<FixtureCluster>>>,
     event_tx: broadcast::Sender<Arc<FixtureCluster>>,
+    statistics_event_tx: broadcast::Sender<Arc<StatisticsUpdated>>,
     market_history_service: Arc<MarketHistoryService>,
 }
 
@@ -35,8 +38,37 @@ impl ClusterService {
             game_id_to_fixture_cluster_key: DashMap::new(),
             cluster_id_to_date: DashMap::new(),
             event_tx: broadcast::Sender::new(20),
+            statistics_event_tx: broadcast::Sender::new(20),
             market_history_service,
         }
+    }
+
+    fn emit_statistics_updated(&self) {
+        let _ = self.statistics_event_tx.send(Arc::new(StatisticsUpdated {
+            statistics: self.get_all_statistics(),
+        }));
+    }
+
+    pub fn get_all_statistics(&self) -> HashMap<(MarketType, Outcome), StatisticsValues> {
+        let mut aggregated: HashMap<(MarketType, Outcome), ClusterStatistics> = HashMap::new();
+
+        for clusters_on_date in self.clusters.iter() {
+            for cluster in clusters_on_date.value().iter() {
+                for ((market_type, outcome), diff) in cluster.value().statistics_diffs() {
+                    aggregated
+                        .entry((market_type, outcome))
+                        .or_default()
+                        .add_diff(diff);
+                }
+            }
+        }
+
+        aggregated
+            .into_iter()
+            .map(|((market_type, outcome), stats)| {
+                ((market_type, outcome), StatisticsValues::from(&stats))
+            })
+            .collect()
     }
 
     pub fn new() -> Self {
@@ -45,6 +77,7 @@ impl ClusterService {
             game_id_to_fixture_cluster_key: DashMap::new(),
             cluster_id_to_date: DashMap::new(),
             event_tx: broadcast::Sender::new(20),
+            statistics_event_tx: broadcast::Sender::new(20),
             market_history_service: Arc::new(MarketHistoryService::default()),
         }
     }
@@ -57,6 +90,7 @@ impl ClusterService {
             }
 
             let mut found = false;
+            let mut modified = false;
             let game_id = game.id.clone();
             let game_date = game.date.clone();
             let mut pending_game: Option<Game> = Some(game);
@@ -67,6 +101,7 @@ impl ClusterService {
                     match Arc::make_mut(cluster).try_to_add_game(pending_game.take().unwrap()) {
                         Ok(_) => {
                             found = true;
+                            modified = true;
                             let game_ref = cluster
                                 .get_game(&game_id)
                                 .expect("no game after try to add with success");
@@ -91,8 +126,14 @@ impl ClusterService {
                 }
             }
 
+            if modified {
+                self.emit_statistics_updated();
+            }
+
             if !found {
-                let cluster = FixtureCluster::new(pending_game.unwrap());
+                let game = pending_game.unwrap();
+
+                let cluster = FixtureCluster::new(game);
                 let cluster_key = cluster.key();
                 self.clusters
                     .entry(game_date)
@@ -105,6 +146,7 @@ impl ClusterService {
                 self.cluster_id_to_date
                     .entry(cluster_key)
                     .insert_entry(game_date);
+                self.emit_statistics_updated();
             }
         }
 
@@ -122,27 +164,24 @@ impl ClusterService {
                     clusters_by_id
                         .entry(cluster_id.clone())
                         .and_modify(|cluster| {
-                            Arc::make_mut(cluster).update_markets(
-                                game_id,
-                                game.markets().values().cloned().collect(),
-                            );
+                            if cluster.get_game(game_id).is_some() {
+                                Arc::make_mut(cluster).update_markets(
+                                    game_id,
+                                    game.markets().values().cloned().collect(),
+                                );
 
-                            if cluster.game_count() > 1 {
-                                let _ = self.event_tx.send(cluster.clone());
+                                if cluster.game_count() > 1 {
+                                    let _ = self.event_tx.send(cluster.clone());
+                                }
                             }
                         });
                 });
-                arbitrages.append(
-                    &mut self
-                        .clusters
-                        .get(&game.date)
-                        .unwrap()
-                        .value()
-                        .get(cluster_id.as_str())
-                        .unwrap() // TODO: I observed a panic here
-                        .value()
-                        .arbitrage_opportunites(),
-                );
+                self.emit_statistics_updated();
+                if let Some(clusters_by_date) = self.clusters.get(&game.date)
+                    && let Some(cluster) = clusters_by_date.value().get(cluster_id.as_str())
+                {
+                    arbitrages.append(&mut cluster.value().arbitrage_opportunites());
+                }
                 self.market_history_service
                     .update_market_history(&game_id, game.markets());
             } else {
@@ -154,24 +193,35 @@ impl ClusterService {
     }
 
     pub fn insert_markets(&self, game_id: &str, markets: Vec<Market>) -> Vec<Arbitrage> {
+        let mut modified = false;
+        let mut arbitrages = Vec::new();
+
         if let Some(cluster_key_ref) = self.game_id_to_fixture_cluster_key.get(game_id)
             && let Some(game_date_ref) = self.cluster_id_to_date.get(cluster_key_ref.key())
             && let Some(games_on_date_ref) = self.clusters.get_mut(game_date_ref.value())
             && let Some(mut cluster_ref) = games_on_date_ref.value().get_mut(cluster_key_ref.key())
         {
             let cluster = cluster_ref.value_mut();
-            Arc::make_mut(cluster).update_markets(game_id, markets);
+            if cluster.get_game(game_id).is_some() {
+                modified = true;
+                Arc::make_mut(cluster).update_markets(game_id, markets);
 
-            let game = cluster
-                .get_game(game_id)
-                .expect("failed to get game in insert markets");
-            self.market_history_service
-                .update_market_history(&game_id, game.markets());
+                let game = cluster
+                    .get_game(game_id)
+                    .expect("failed to get game in insert markets");
+                let new_markets = game.markets();
+                self.market_history_service
+                    .update_market_history(&game_id, new_markets);
 
-            return cluster.arbitrage_opportunites();
+                arbitrages = cluster.arbitrage_opportunites();
+            }
         }
 
-        vec![]
+        if modified {
+            self.emit_statistics_updated();
+        }
+
+        arbitrages
     }
 
     pub fn get_clusters(&self) -> Vec<Arc<FixtureCluster>> {
@@ -209,6 +259,10 @@ impl ClusterService {
 
     pub fn subscribe_to_game_updates(&self) -> Receiver<Arc<FixtureCluster>> {
         self.event_tx.subscribe()
+    }
+
+    pub fn subscribe_to_cluster_statistics(&self) -> Receiver<Arc<StatisticsUpdated>> {
+        self.statistics_event_tx.subscribe()
     }
 
     pub fn get_games(&self) -> Vec<Game> {
@@ -255,6 +309,11 @@ impl ClusterService {
 
 pub enum ClusterServiceErrors {
     ClusterNotFound,
+}
+
+#[derive(Debug, Clone)]
+pub struct StatisticsUpdated {
+    pub statistics: HashMap<(MarketType, Outcome), StatisticsValues>,
 }
 
 impl fmt::Display for ClusterService {

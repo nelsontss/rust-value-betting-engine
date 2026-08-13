@@ -7,7 +7,7 @@ use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::stream::MaybeTlsStream;
 use tokio_tungstenite::tungstenite::{Message, WebSocket};
 
-use crate::application::services::bookmaker_scrapper_service::{BookmakerEvent, Connector};
+use crate::application::services::bookmaker_scrapper_service::BookmakerEvent;
 use crate::domain::{Game, Platform};
 use crate::infrastructure::parsers::bwin_parser::{BwinParser, BwinWSEvent};
 use crate::infrastructure::parsers::parser_registry::ParserRegistry;
@@ -15,9 +15,20 @@ use crate::shared::error::Result;
 
 pub struct BwinConnector {}
 
-impl Connector for BwinConnector {
-    fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
+impl BwinConnector {
+    pub async fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
         let registry = ParserRegistry::new();
+
+        tokio::task::spawn_blocking(move || {
+            Self::run_blocking(sender, registry);
+        })
+        .await
+        .map_err(|e| format!("Bwin connector task failed: {e}"))?;
+
+        Ok(())
+    }
+
+    fn run_blocking(sender: Sender<BookmakerEvent>, registry: ParserRegistry) {
         match BwinConnector::client()
             .get(BwinConnector::FIXTURES_URL)
             .send()
@@ -29,7 +40,7 @@ impl Connector for BwinConnector {
                             BwinConnector::subscribe_to_game_updates(games, sender);
                         }
                         None => {
-                            eprintln!("no parser registered for platform LeBull");
+                            eprintln!("no parser registered for platform Bwin");
                         }
                     }
                 } else {
@@ -40,12 +51,8 @@ impl Connector for BwinConnector {
                 eprintln!("Error making polling request to bwin: {:?}", e);
             }
         }
-
-        Ok(())
     }
-}
 
-impl BwinConnector {
     const FIXTURES_URL: &str = "https://www.bwin.pt/cds-api/bettingoffer/fixtures?x-bwin-accessid=YmQwNTFkNDAtNzM3Yi00YWIyLThkNDYtYWFmNGY2N2Y1OWIx&lang=en&country=PT&userCountry=PT&fixtureTypes=Standard&state=Latest&offerMapping=Filtered&offerCategories=Gridable&fixtureCategories=Gridable,NonGridable,Other&sportIds=4&isPriceBoost=false&statisticsModes=None&skip=0&take=50&sortBy=Tags";
     const WEBSOCKET_URL: &str = "wss://cds-push.bwin.pt/ws-1-0?lang=pt&country=PT&x-bwin-accessId=YmQwNTFkNDAtNzM3Yi00YWIyLThkNDYtYWFmNGY2N2Y1OWIx&appUpdates=false";
 

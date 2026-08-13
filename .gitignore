@@ -5,5 +5,10 @@ bridge.log
 coverage/
 .github
 
-.opencode/
+.opencode/node_modules/
+.opencode/package*
 .playwright-mcp/
+.env*
+
+*.db*
+db/

@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 
 use crate::domain::{
     Platform,
-    entities::{Arbitrage, Game, Market, MarketGroup, MarketType},
+    entities::{Arbitrage, Game, Market, MarketGroup, MarketType, Outcome},
 };
 
 #[cfg(test)]
@@ -140,6 +140,46 @@ impl FixtureCluster {
         Some(group)
     }
 
+    pub fn statistics_diffs(&self) -> HashMap<(MarketType, Outcome), f64> {
+        self.market_type_to_game_ids
+            .iter()
+            .flat_map(|(market_type, _)| {
+                market_type
+                    .outcomes()
+                    .into_iter()
+                    .filter_map(move |outcome| {
+                        self.diff_for_outcome(market_type, &outcome)
+                            .map(|diff| ((market_type.clone(), outcome), diff))
+                    })
+            })
+            .collect()
+    }
+
+    fn diff_for_outcome(&self, market_type: &MarketType, outcome: &Outcome) -> Option<f64> {
+        let mut poly_value: Option<f64> = None;
+        let mut other_values: Vec<f64> = Vec::new();
+
+        for game in self.games() {
+            let Some(market) = game.markets().get(market_type) else {
+                continue;
+            };
+            let Some(odd) = market.odd_for_outcome(outcome) else {
+                continue;
+            };
+
+            if game.platform() == Platform::Polymarket {
+                poly_value = Some(odd.get_implied_probability());
+            } else {
+                other_values.push(odd.get_implied_probability());
+            }
+        }
+
+        let poly_value = poly_value?;
+        let median_other = median_of(&mut other_values)?;
+
+        Some(poly_value - median_other)
+    }
+
     pub fn print_games_list(&self) {
         for (_, game) in self.games.iter() {
             let platform = format!("{:?}", game.platform()).to_lowercase();
@@ -185,5 +225,21 @@ impl<'a> fmt::Display for FixtureCluster {
         }
 
         Ok(())
+    }
+}
+
+fn median_of(values: &mut Vec<f64>) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let middle = values.len() / 2;
+
+    if values.len() % 2 == 0 {
+        Some((values[middle - 1] + values[middle]) / 2.0)
+    } else {
+        Some(values[middle])
     }
 }

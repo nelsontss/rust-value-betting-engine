@@ -250,3 +250,48 @@
        22.4 [X] Add `/games/$platform` route for platform-filtered games view
        22.5 [X] Create `useGames` and `usePlatformGames` hooks with TanStack Query
        22.6 [X] Add platform badge links for navigation between all games and platform views
+
+23. [X] Polymarket live connector
+
+       23.1 [X] Add `Platform::Polymarket` and game/market mapping from Polymarket events (moneyline, match result/int\/5, double chance, totals, spreads)
+       23.2 [X] Fetch upcoming soccer events from Gamma REST API (48h window, paginated) in `polymarket_connector.rs`
+       23.3 [X] Stream live prices over the market WebSocket channel with `custom_feature_enabled` and 10s heartbeat (raw `tokio-tungstenite`)
+       23.4 [X] Discover newly listed markets via `new_market` events and subscribe incrementally to their price channels
+       23.5 [X] Feed live Polymarket games into `ClusterService` for diff extraction, with 1h snapshot poll for reconciliation
+
+24. [X] Cluster outcome diff statistics
+
+       24.1 [X] Compute `diff` per market outcome: `Polymarket implied prob − median bookmaker implied prob` in `cluster_service.rs`
+       24.2 [X] Add `QuantileMultiset` order-statistics structure backing percentile computation
+       24.3 [X] Aggregate per `(MarketType, Outcome)` into `ClusterStatistics` with mean, median, p05, p25, p75, p95 and sample count
+       24.4 [X] Broadcaster `StatisticsUpdated` from `ClusterService` and SSE endpoint `GET /statistics` in the server
+       24.5 [X] Add statistics DTOs and tests for percentiles and aggregation
+
+25. [X] Trade domain and persistence
+
+       25.1 [X] Add `Trade` entity with `TradeStatus` lifecycle (open/closed/cancelled/expired), `TradeStrategy`, side, stake, entry/exit price, PnL, and paper flag
+       25.2 [X] Add `TradeRepository` on SQLite with `trades` table migration and insert/get/update/open-trades queries
+       25.3 [X] Register `trade` module and repository in the module trees
+
+26. [X] Polymarket execution provider
+
+       26.1 [X] Build authenticated CLOB client (`localSignerType` from `POLYMARKET_PRIVATE_KEY`) in `polymarket_provider.rs`
+       26.2 [X] Query current price for a token id and fetch today's soccer draw markets from local DB
+       26.3 [X] Place signed post-only limit orders with fill polling and `wait_for_trade` resolution
+       26.4 [X] Exit open trades with take-profit/price-offset logic and cancel-all support
+       26.5 [X] Paper mode recording trades without placing real orders
+
+27. [X] Polymarket data pipeline and CLI
+
+       27.1 [X] Add `PolymarketRepository` on SQLite: `polymarket_events`, `polymarket_markets`, and OHLCV price history tables
+       27.2 [X] Add `polymarket-cli` binary: `fetch-matches` (Gamma history backfill), `fetch-prices` (pmxt.dev candles, needs `PMXT_API_KEY`)
+       27.3 [X] Add `list`, `info`, and `backup` DB inspection commands
+       27.4 [X] Add `TradeConfig` (bankroll, max/min price bands, buy/sell offsets) and wire into the trading module
+
+28. [X] Draw-value strategy trading and backtesting
+
+       28.1 [X] Implement `DrawValueStrategy` signal (buy low-priced draw markets) and `TradeSimulator` execution engine
+       28.2 [X] Compute `BacktestMetrics`: win rate, total/avg PnL, max drawdown, Sharpe ratio
+       28.3 [X] Add `BacktestRunner` over stored OHLCV candles with a `backtest` CLI command
+       28.4 [X] Add `DrawTimeDecay` trade bot: today's draw markets with volume filter, scheduled buy ~10min before kickoff, auto-sell, resume of open trades on restart
+       28.5 [X] Expose `draw-trade` CLI command with `--paper` mode

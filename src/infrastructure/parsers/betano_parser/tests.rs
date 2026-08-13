@@ -183,17 +183,19 @@ fn parse_data_type_13_is_total() {
 }
 
 #[test]
-fn parse_data_type_14_is_first_half_total() {
-    let markets = vec![market_with_selections(14, vec![
-        selection(2.0),
-        selection(1.8),
-    ])];
+fn parse_data_type_14_is_skipped() {
+    let markets = vec![
+        market_with_selections(1, vec![selection(2.0), selection(3.2), selection(4.0)]),
+        market_with_selections(14, vec![selection(2.0), selection(1.8)]),
+    ];
     let events = vec![betano_event("evt-4", "Arsenal", "Chelsea", markets)];
     let data = json!({"blocks": [block_with_events(events)]});
 
     let games = BetanoParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    assert_eq!(total_count(&games[0].markets().values().cloned().collect::<Vec<_>>()), 1);
+    let all_markets = games[0].markets().values().cloned().collect::<Vec<_>>();
+    assert_eq!(match_result_count(&all_markets), 1);
+    assert_eq!(total_count(&all_markets), 0);
 }
 
 #[test]

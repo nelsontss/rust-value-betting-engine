@@ -5,7 +5,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
     domain::{ClusterService, services::market_history_service::MarketHistoryService},
-    infrastructure::server::routes::{clusters, games, market_history, platforms},
+    infrastructure::server::routes::{clusters, games, market_history, platforms, statistics},
 };
 
 pub struct AppState {
@@ -31,6 +31,7 @@ pub fn build_router(app_state: Arc<AppState>) -> Router {
             "/see/games/{id}/markets/history",
             get(market_history::sse_get),
         )
+        .route("/statistics", get(statistics::sse_get))
         .layer(cors)
         .with_state(app_state)
 }

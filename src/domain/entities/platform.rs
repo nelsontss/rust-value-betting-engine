@@ -10,4 +10,5 @@ pub enum Platform {
     Betano,
     LeBull,
     Bwin,
+    Polymarket,
 }

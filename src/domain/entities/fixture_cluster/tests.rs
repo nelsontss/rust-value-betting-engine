@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
 use crate::domain::entities::{
-    Arbitrage, FixtureCluster, Game, Market, MarketGroup, MarketType, Odd, Platform,
+    Arbitrage, FixtureCluster, Game, Market, MarketGroup, MarketType, Odd, Outcome, Platform,
     markets::{Line, moneyline::MoneylineMarket, total::TotalMarket},
 };
 
@@ -404,4 +404,62 @@ fn update_markets_does_not_duplicate_game_ids_for_existing_market_type() {
     assert_eq!(1, game_ids.len());
     assert!(game_ids.contains(&game_id));
     assert_moneyline_group(&cluster, vec![as_moneyline(&updated_moneyline)]);
+}
+
+#[test]
+fn statistics_diffs_pairs_polymarket_probs_with_other_platforms_median() {
+    let poly_game = game_with_markets(
+        Platform::Polymarket,
+        vec![total_market("poly-total", 2.5, 2.0, 2.0)],
+    );
+    let betano_game = game_with_markets(
+        Platform::Betano,
+        vec![total_market("betano-total", 2.5, 1.9, 2.1)],
+    );
+
+    let mut cluster = FixtureCluster::new(poly_game);
+    assert!(cluster.try_to_add_game(betano_game).is_ok());
+
+    let diffs = cluster.statistics_diffs();
+    let total_type = total_market_type(2.5);
+
+    let over_diff = diffs[&(total_type.clone(), Outcome::Over)];
+    let under_diff = diffs[&(total_type, Outcome::Under)];
+
+    let poly_over = 1.0 / 2.0;
+    let poly_under = 1.0 / 2.0;
+    let betano_over = 1.0 / 1.9;
+    let betano_under = 1.0 / 2.1;
+
+    assert!((over_diff - (poly_over - betano_over)).abs() < 1e-9);
+    assert!((under_diff - (poly_under - betano_under)).abs() < 1e-9);
+}
+
+#[test]
+fn statistics_diffs_are_empty_without_polymarket_game() {
+    let betano_game = game_with_markets(
+        Platform::Betano,
+        vec![total_market("betano-total", 2.5, 1.9, 2.1)],
+    );
+    let bwin_game = game_with_markets(
+        Platform::Bwin,
+        vec![total_market("bwin-total", 2.5, 2.0, 2.0)],
+    );
+
+    let mut cluster = FixtureCluster::new(betano_game);
+    assert!(cluster.try_to_add_game(bwin_game).is_ok());
+
+    assert!(cluster.statistics_diffs().is_empty());
+}
+
+#[test]
+fn statistics_diffs_are_empty_without_other_platforms() {
+    let poly_game = game_with_markets(
+        Platform::Polymarket,
+        vec![total_market("poly-total", 2.5, 2.0, 2.0)],
+    );
+
+    let cluster = FixtureCluster::new(poly_game);
+
+    assert!(cluster.statistics_diffs().is_empty());
 }

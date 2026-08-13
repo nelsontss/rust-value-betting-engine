@@ -39,8 +39,9 @@ fn platform_deserializes_from_lowercase() {
 #[test]
 fn platform_iter_returns_all_variants() {
     let variants: Vec<Platform> = Platform::iter().collect();
-    assert_eq!(variants.len(), 3);
+    assert_eq!(variants.len(), 4);
     assert!(variants.contains(&Platform::Betano));
     assert!(variants.contains(&Platform::LeBull));
     assert!(variants.contains(&Platform::Bwin));
+    assert!(variants.contains(&Platform::Polymarket));
 }

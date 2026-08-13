@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::thread;
 
 use tokio::sync::mpsc::{Receiver, Sender, channel};
 
@@ -7,6 +6,7 @@ use crate::domain::{ClusterService, Game, Market};
 use crate::infrastructure::connectors::bridge_connector::BridgeConnector;
 use crate::infrastructure::connectors::bwin_connector::BwinConnector;
 use crate::infrastructure::connectors::lebull_connector::LeBullConnector;
+use crate::infrastructure::connectors::polymarket_connector::PolymarketConnector;
 use crate::shared::error::Result;
 
 pub enum BookmakerEvent {
@@ -15,28 +15,43 @@ pub enum BookmakerEvent {
     UpdateMarkets((String, Vec<Market>)),
 }
 
-pub trait Connector: Send + Sync {
-    fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()>;
+pub enum ConnectorKind {
+    Bridge(BridgeConnector),
+    LeBull(LeBullConnector),
+    Bwin(BwinConnector),
+    Polymarket(PolymarketConnector),
+}
+
+impl ConnectorKind {
+    pub async fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
+        match self {
+            Self::Bridge(c) => c.start(sender).await,
+            Self::LeBull(c) => c.start(sender).await,
+            Self::Bwin(c) => c.start(sender).await,
+            Self::Polymarket(c) => c.start(sender).await,
+        }
+    }
 }
 
 pub struct BookmakerScrapperService {
     cluster_service: Arc<ClusterService>,
     tx: Sender<BookmakerEvent>,
     rx: Receiver<BookmakerEvent>,
-    connectors: Vec<Box<dyn Connector>>,
+    connectors: Vec<ConnectorKind>,
 }
 
 impl BookmakerScrapperService {
     pub fn new(cluster_service: Arc<ClusterService>) -> Self {
         let (tx, rx) = channel::<BookmakerEvent>(100);
         BookmakerScrapperService {
-            cluster_service: cluster_service,
+            cluster_service,
             tx,
             rx,
             connectors: vec![
-                Box::new(BridgeConnector::new()),
-                Box::new(LeBullConnector::new()),
-                Box::new(BwinConnector::new()),
+                ConnectorKind::Bridge(BridgeConnector::new()),
+                ConnectorKind::LeBull(LeBullConnector::new()),
+                ConnectorKind::Bwin(BwinConnector::new()),
+                ConnectorKind::Polymarket(PolymarketConnector::new()),
             ],
         }
     }
@@ -44,8 +59,8 @@ impl BookmakerScrapperService {
     pub async fn run(&mut self) {
         for connector in self.connectors.drain(..) {
             let tx = self.tx.clone();
-            thread::spawn(move || {
-                let _ = connector.start(tx);
+            tokio::spawn(async move {
+                let _ = connector.start(tx).await;
             });
         }
 

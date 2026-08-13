@@ -24,6 +24,7 @@ async fn main() {
 
         bookmaker_scrapper_service.run().await;
     });
+    let mut engine = engine;
     let app_state = Arc::new(AppState {
         cluster_service,
         market_history_service,
@@ -33,9 +34,12 @@ async fn main() {
     ));
 
     tokio::select! {
-        _ = engine => tracing::warn!("engine stopped"),
+        _ = &mut engine => tracing::warn!("engine stopped"),
         _ = tokio::signal::ctrl_c() => tracing::info!("received ctrl+c, shutting down"),
     }
 
+    engine.abort();
     server.abort();
+    tracing::info!("shutdown complete");
+    std::process::exit(0);
 }

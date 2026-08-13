@@ -1,6 +1,6 @@
 # rust-value-betting-engine
 
-Rust engine for clustering equivalent fixtures across bookmakers, aggregating market data, detecting arbitrage opportunities, and ingesting live odds via Chrome extension.
+Rust engine for clustering equivalent fixtures across bookmakers, aggregating market data, detecting arbitrage opportunities, ingesting live odds via Chrome extension, comparing Polymarket prediction-market prices against bookmaker consensus, and executing automated trading strategies (paper or live).
 
 ## Features
 
@@ -16,6 +16,13 @@ Rust engine for clustering equivalent fixtures across bookmakers, aggregating ma
 - **Chrome extension** with background service worker polling bookmaker APIs and forwarding data via native messaging.
 - **Unix socket bridge** (`bridge` binary) for extension-to-engine communication with length-prefixed message framing.
 - **Platform parser** system for converting raw API JSON into domain `Game` objects.
+- **Polymarket live connector** for soccer: fetches upcoming events from the Gamma REST API (48h window), maps events/markets into domain `Game`s, streams live prices over the market WebSocket (raw channel with `custom_feature_enabled`), discovers newly listed markets via `new_market` events and subscribes to them incrementally.
+- **Outcome diff statistics / percentiles**: per `(MarketType, Outcome)`, computes `diff = Polymarket implied probability − median bookmaker implied probability` across all fixture clusters and aggregates mean, median, and p05/p25/p75/p95 quantiles (order-statistics `QuantileMultiset`), streamed over `/statistics` SSE.
+- **Trade domain & SQLite persistence**: `Trade` entity with open/close lifecycle, PnL, paper vs live flag, and a `TradeRepository` storing trades in SQLite.
+- **Polymarket execution provider**: authenticated CLOB client (local signer) for posting signed limit orders (post-only), querying prices, waiting for order fills, and cancelling open orders.
+- **DrawTimeDecay trading bot**: schedules a buy ~10 min before kickoff on low-priced soccer `draw` markets (price decay strategy), auto-sells after the market moves, resumes open trades on restart, and supports paper mode.
+- **Backtesting framework**: pluggable `Strategy` trait, `TradeSimulator` (win rate, total/avg PnL, max drawdown, Sharpe ratio), and a `DrawValueStrategy` evaluated against stored Polymarket OHLCV candles.
+- **`polymarket-cli` utility binary**: fetch historical soccer events from Gamma, backfill OHLCV candles from the pmxt.dev API, list/inspect/backup the DB, run the draw-value backtest, and execute the draw trading strategy.
 
 ## Architecture
 
@@ -77,11 +84,16 @@ Inside the domain, the current design is centered around a few key concepts:
 │   ├── lib.rs (library entry point: expose modules and public API)
 │   ├── main.rs (binary entry point: keep startup thin and call into lib.rs)
 │   ├── bin (additional binaries)
-│   │   └── bridge.rs (Unix socket bridge between extension and engine)
+│   │   ├── bridge.rs (Unix socket bridge between extension and engine)
+│   │   └── polymarket_cli.rs (fetch/store Polymarket data, backtest, run trade bot)
 │   ├── application (application layer: orchestration of business flows)
 │   │   ├── mod.rs (register application submodules)
+│   │   ├── backtesting (backtest execution on stored Polymarket history)
 │   │   └── services (application services: coordinate workflows and integrations)
-│   │      └── mod.rs (register application service modules)
+│   │      ├── mod.rs (register application service modules)
+│   │      └── trading (automated trading strategies)
+│   │         ├── mod.rs
+│   │         └── draw_trade_bot.rs (DrawTimeDecay bot: scheduled buy/sell on Polymarket)
 │   ├── benchmark (benchmark data generators, AI-generated)
 │   │   ├── mod.rs
 │   │   └── data.rs
@@ -93,9 +105,13 @@ Inside the domain, the current design is centered around a few key concepts:
 │   │   │   ├── market.rs
 │   │   │   ├── fixture_cluster.rs
 │   │   │   ├── arbitrage.rs
+│   │   │   ├── trade.rs (trade lifecycle: open/close, PnL, paper/live)
 │   │   │   └── platform.rs
 │   │   ├── services (pure domain rules that do not belong to one entity)
-│   │   │   └── mod.rs (register domain service modules)
+│   │   │   ├── mod.rs (register domain service modules)
+│   │   │   ├── quantile_multiset.rs (order-statistics percentile multiset)
+│   │   │   ├── cluster_statistics.rs (diff percentiles per market/outcome)
+│   │   │   └── backtesting (strategy trait, simulator, metrics)
 │   │   └── value_objects (small immutable business types like odds or probabilities)
 │   │       └── mod.rs (register value object modules)
 │   ├── infrastructure (adapters for config, storage, HTTP, feeds, and other externals)
@@ -105,13 +121,24 @@ Inside the domain, the current design is centered around a few key concepts:
 │   │   ├── bridge (BridgeMessage types and serialization)
 │   │   │   ├── mod.rs
 │   │   │   └── types.rs
-│   │   └── connectors (bookmaker data parsers and bridge connector)
-│   │       ├── mod.rs
-│   │       ├── bridge_connector.rs (Unix socket client, receives messages)
-│   │       └── betano_connector.rs (Betano API JSON → Vec<Game> parser)
-│   └── shared (cross-cutting technical utilities shared across layers)
-│       ├── error.rs (shared error and result types)
-│       └── mod.rs (register shared modules)
+│   │   ├── connectors (bookmaker data parsers and bridge connector)
+│   │   │   ├── mod.rs
+│   │   │   ├── bridge_connector.rs (Unix socket client, receives messages)
+│   │   │   ├── betano_connector.rs (Betano API JSON → Vec<Game> parser)
+│   │   │   ├── lebull_connector.rs (LeBull HTTP polling parser)
+│   │   │   ├── bwin_connector.rs (Bwin API parser)
+│   │   │   └── polymarket_connector.rs (Gamma events + market WebSocket stream)
+│   │   ├── polymarket_provider.rs (authenticated Polymarket CLOB execution client)
+│   │   ├── config (configuration loading and startup settings)
+│   │   │   ├── mod.rs (register config modules)
+│   │   │   └── trade_config.rs (bankroll, price bands, buy/sell offsets)
+│   │   ├── repositories
+│   │   │   ├── mod.rs (register repository modules)
+│   │   │   ├── trade_repository.rs (SQLite trades persistence)
+│   │   │   └── polymarket_repository.rs (events, markets, OHLCV price history)
+│   │   └── shared (cross-cutting technical utilities shared across layers)
+│   │       ├── error.rs (shared error and result types)
+│   │       └── mod.rs (register shared modules)
 └── tests (integration and behavior-level tests)
     └── smoke_test.rs (example integration test against the public API)
 ```
@@ -177,7 +204,7 @@ If you add `src/domain/markets/mod.rs`, update `src/domain/mod.rs` with `pub mod
 ## Commands
 
 ```sh
-cargo run
+cargo run            # run the engine
 cargo test
 cargo test fixture_cluster
 cargo test cluster_service
@@ -185,3 +212,17 @@ cargo bench --bench benchmarks
 cargo fmt
 cargo clippy --all-targets --all-features -- -D warnings
 ```
+
+Polymarket CLI (requires `PMXT_API_KEY` for `fetch-prices` and `POLYMARKET_PRIVATE_KEY` for live trading):
+
+```sh
+cargo run --bin polymarket-cli -- fetch-matches --maybe-start-date-min 2024-01-01
+cargo run --bin polymarket-cli -- fetch-prices
+cargo run --bin polymarket-cli -- list
+cargo run --bin polymarket-cli -- info
+cargo run --bin polymarket-cli -- backup
+cargo run --bin polymarket-cli -- backtest
+cargo run --bin polymarket-cli -- draw-trade --paper
+```
+
+Environment: `PMXT_API_KEY` (pmxt.dev API), `POLYMARKET_PRIVATE_KEY` (CLOB signer for live orders), and the CLI's `-d/--db-path` (default `polymarket_data.db`).

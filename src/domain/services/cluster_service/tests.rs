@@ -701,3 +701,66 @@ fn insert_games_creates_new_cluster_for_unknown_distinct_fixture() {
             .contains_key(&new_game_id)
     );
 }
+
+#[test]
+fn add_games_emits_statistics_updated_for_each_outcome() {
+    let poly_game = porto_benfica_with_markets(
+        Platform::Polymarket,
+        vec![total_market("poly-total", 2.5, 2.0, 2.0)],
+    );
+    let betano_game = porto_benfica_with_markets(
+        Platform::Betano,
+        vec![total_market("betano-total", 2.5, 1.9, 2.1)],
+    );
+
+    let cluster_service = ClusterService::new();
+    let mut rx = cluster_service.subscribe_to_cluster_statistics();
+
+    cluster_service.add_games(vec![poly_game, betano_game]);
+
+    let mut update = None;
+    while let Ok(latest) = rx.try_recv() {
+        update = Some(latest);
+    }
+
+    let update = update.expect("expected statistics update");
+    assert_eq!(2, update.statistics.len());
+    for values in update.statistics.values() {
+        assert_eq!(1, values.samples);
+    }
+}
+
+#[test]
+fn insert_games_emits_statistics_updated_on_update() {
+    let poly_game = porto_benfica_with_markets(
+        Platform::Polymarket,
+        vec![total_market("poly-total", 2.5, 2.0, 2.0)],
+    );
+    let first_game = porto_benfica_with_markets(
+        Platform::Betano,
+        vec![total_market("betano-total", 2.5, 1.9, 2.1)],
+    );
+
+    let cluster_service = ClusterService::new();
+    let mut rx = cluster_service.subscribe_to_cluster_statistics();
+
+    cluster_service.add_games(vec![first_game.clone(), poly_game]);
+
+    while rx.try_recv().is_ok() {}
+
+    let mut updated_first_game = first_game;
+    updated_first_game.update_markets(vec![total_market("betclic-total", 2.5, 1.8, 2.2)]);
+
+    cluster_service.insert_games(vec![updated_first_game]);
+
+    let mut update = None;
+    while let Ok(latest) = rx.try_recv() {
+        update = Some(latest);
+    }
+
+    let update = update.expect("expected statistics update");
+    assert_eq!(2, update.statistics.len());
+    for values in update.statistics.values() {
+        assert_eq!(1, values.samples);
+    }
+}

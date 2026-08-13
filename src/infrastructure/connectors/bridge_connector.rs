@@ -3,7 +3,7 @@ use std::os::unix::net::UnixStream;
 
 use tokio::sync::mpsc::Sender;
 
-use crate::application::services::bookmaker_scrapper_service::{BookmakerEvent, Connector};
+use crate::application::services::bookmaker_scrapper_service::BookmakerEvent;
 use crate::infrastructure::bridge::BridgeMessage;
 use crate::infrastructure::config::BridgeConfig;
 use crate::infrastructure::parsers::parser_registry::ParserRegistry;
@@ -11,18 +11,20 @@ use crate::shared::error::Result;
 
 pub struct BridgeConnector {}
 
-impl Connector for BridgeConnector {
-    fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
-        self.start_at(sender, BridgeConfig::SOCKET_PATH)
-    }
-}
-
 impl BridgeConnector {
+    pub async fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
+        let socket_path = BridgeConfig::SOCKET_PATH.to_string();
+        tokio::task::spawn_blocking(move || Self::start_at(sender, &socket_path))
+            .await
+            .map_err(|e| format!("Bridge connector task failed: {e}"))??;
+        Ok(())
+    }
+
     pub fn new() -> Self {
         BridgeConnector {}
     }
 
-    fn start_at(&self, sender: Sender<BookmakerEvent>, socket_path: &str) -> Result<()> {
+    fn start_at(sender: Sender<BookmakerEvent>, socket_path: &str) -> Result<()> {
         let registry = ParserRegistry::new();
         let mut stream = UnixStream::connect(socket_path)?;
 

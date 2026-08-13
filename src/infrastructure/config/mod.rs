@@ -1,3 +1,4 @@
+pub mod trade_config;
 pub struct BridgeConfig;
 
 impl BridgeConfig {
