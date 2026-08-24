@@ -4,18 +4,20 @@ use std::{
     sync::Arc,
 };
 
-use chrono::NaiveDateTime;
-use dashmap::DashMap;
+use chrono::{NaiveDateTime, Utc};
+use dashmap::{DashMap, mapref::entry::Entry};
 use tokio::sync::broadcast::{self, Receiver};
 
-use crate::domain::{
-    Market, Platform,
-    entities::{Arbitrage, FixtureCluster, Game, MarketType, Outcome},
-    services::{
-        cluster_service::ClusterServiceErrors::ClusterNotFound,
-        cluster_statistics::{ClusterStatistics, StatisticsValues},
-        market_history_service::MarketHistoryService,
+use crate::{
+    domain::{
+        Market, Platform,
+        entities::{Arbitrage, FixtureCluster, Game, MarketType, Outcome},
+        services::{
+            cluster_service::ClusterServiceErrors::ClusterNotFound, market_service::MarketService,
+            statistics_service::StatisticsService,
+        },
     },
+    infrastructure::repositories::fixture_cluster_repository::FixtureClusterRepository,
 };
 
 #[cfg(test)]
@@ -27,49 +29,14 @@ pub struct ClusterService {
     cluster_id_to_date: DashMap<String, NaiveDateTime>,
     clusters: DashMap<NaiveDateTime, DashMap<String, Arc<FixtureCluster>>>,
     event_tx: broadcast::Sender<Arc<FixtureCluster>>,
-    statistics_event_tx: broadcast::Sender<Arc<StatisticsUpdated>>,
-    market_history_service: Arc<MarketHistoryService>,
+    market_service: Option<Arc<MarketService>>,
+    fixture_cluster_repository: Option<Arc<FixtureClusterRepository>>,
+    statistics_service: Option<Arc<StatisticsService>>,
 }
 
 impl ClusterService {
-    pub fn with_market_history_service(market_history_service: Arc<MarketHistoryService>) -> Self {
-        ClusterService {
-            clusters: DashMap::new(),
-            game_id_to_fixture_cluster_key: DashMap::new(),
-            cluster_id_to_date: DashMap::new(),
-            event_tx: broadcast::Sender::new(20),
-            statistics_event_tx: broadcast::Sender::new(20),
-            market_history_service,
-        }
-    }
-
-    fn emit_statistics_updated(&self) {
-        let _ = self.statistics_event_tx.send(Arc::new(StatisticsUpdated {
-            statistics: self.get_all_statistics(),
-        }));
-    }
-
-    pub fn get_all_statistics(&self) -> HashMap<(MarketType, Outcome), StatisticsValues> {
-        let mut aggregated: HashMap<(MarketType, Outcome), ClusterStatistics> = HashMap::new();
-
-        for clusters_on_date in self.clusters.iter() {
-            for cluster in clusters_on_date.value().iter() {
-                for ((market_type, outcome), diff) in cluster.value().statistics_diffs() {
-                    aggregated
-                        .entry((market_type, outcome))
-                        .or_default()
-                        .add_diff(diff);
-                }
-            }
-        }
-
-        aggregated
-            .into_iter()
-            .map(|((market_type, outcome), stats)| {
-                ((market_type, outcome), StatisticsValues::from(&stats))
-            })
-            .collect()
-    }
+    const SWEEP_INTERVAL_SECS: u64 = 5 * 60;
+    const END_OF_GAME_GRACE_MINUTES: i64 = 100;
 
     pub fn new() -> Self {
         ClusterService {
@@ -77,8 +44,152 @@ impl ClusterService {
             game_id_to_fixture_cluster_key: DashMap::new(),
             cluster_id_to_date: DashMap::new(),
             event_tx: broadcast::Sender::new(20),
-            statistics_event_tx: broadcast::Sender::new(20),
-            market_history_service: Arc::new(MarketHistoryService::default()),
+            market_service: None,
+            fixture_cluster_repository: None,
+            statistics_service: None,
+        }
+    }
+
+    pub fn with_market_service(mut self, market_service: Arc<MarketService>) -> Self {
+        self.market_service = Some(market_service);
+
+        self
+    }
+
+    pub fn with_fixture_cluster_repository(
+        mut self,
+        fixture_cluster_repository: Arc<FixtureClusterRepository>,
+    ) -> Self {
+        self.fixture_cluster_repository = Some(fixture_cluster_repository);
+
+        self
+    }
+
+    pub fn with_statistics_service(mut self, statistics_service: Arc<StatisticsService>) -> Self {
+        self.statistics_service = Some(statistics_service);
+
+        self
+    }
+
+    pub fn persist_cluster(&self, cluster: Arc<FixtureCluster>) {
+        if let Some(repo) = &self.fixture_cluster_repository {
+            if tokio::runtime::Handle::try_current().is_err() {
+                tracing::warn!(
+                    cluster = cluster.key(),
+                    "persist_cluster called outside a tokio runtime; skipping"
+                );
+                return;
+            }
+
+            let repo = Arc::clone(repo);
+            tokio::spawn(async move {
+                let key = cluster.key();
+                if let Err(e) = repo.insert_cluster(&cluster).await {
+                    tracing::error!("Error persist_cluster: {}: {}", key, e);
+                }
+            });
+        }
+    }
+
+    pub fn persist_cluster_diffs(
+        &self,
+        key: String,
+        mean_diffs: HashMap<(MarketType, Outcome), f64>,
+    ) {
+        if let Some(repo) = &self.fixture_cluster_repository {
+            if tokio::runtime::Handle::try_current().is_err() {
+                tracing::warn!(
+                    cluster = key,
+                    "persist_cluster_diffs called outside a tokio runtime; skipping"
+                );
+                return;
+            }
+
+            if mean_diffs.is_empty() {
+                return;
+            }
+
+            let repo = Arc::clone(repo);
+            tokio::spawn(async move {
+                if let Err(e) = repo.insert_cluster_diffs(&key, &mean_diffs).await {
+                    tracing::error!("Error persist_cluster_diffs: {}: {}", key, e);
+                }
+            });
+        }
+    }
+
+    /// Completes the fixture lifecycle: persists the final state and the mean
+    /// diffs, removes the cluster from memory and refreshes live statistics.
+    fn end_cluster(&self, cluster_id: &str) {
+        let Some(date_ref) = self.cluster_id_to_date.get(cluster_id) else {
+            return;
+        };
+        let game_date = *date_ref.value();
+        drop(date_ref);
+
+        let mut ended: Option<Arc<FixtureCluster>> =
+            self.clusters.get(&game_date).and_then(|clusters_on_date| {
+                clusters_on_date
+                    .value()
+                    .remove(cluster_id)
+                    .map(|(_, cluster)| cluster)
+            });
+
+        if let Some(cluster) = ended.as_mut() {
+            Arc::make_mut(cluster).close();
+        }
+
+        if let Some(cluster) = ended.as_ref() {
+            let mean_diffs = cluster.statistics_diffs();
+            self.persist_cluster(Arc::clone(cluster));
+            self.persist_cluster_diffs(cluster.key(), mean_diffs.clone());
+
+            if let Some(stats_service) = &self.statistics_service {
+                stats_service.add_completed_fixture_diffs(mean_diffs);
+            }
+        }
+
+        self.game_id_to_fixture_cluster_key
+            .retain(|_, v| v.as_str() != cluster_id);
+        self.cluster_id_to_date.remove(cluster_id);
+
+        if self
+            .clusters
+            .get(&game_date)
+            .is_some_and(|clusters_on_date| clusters_on_date.is_empty())
+        {
+            self.clusters.remove(&game_date);
+        }
+    }
+
+    /// Periodically ends clusters whose games started more than
+    /// `END_OF_GAME_GRACE_MINUTES` ago.
+    pub fn start_end_of_game_sweeper(self: &Arc<Self>) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(Self::SWEEP_INTERVAL_SECS));
+
+            loop {
+                interval.tick().await;
+                service.sweep_ended_clusters();
+            }
+        });
+    }
+
+    fn sweep_ended_clusters(&self) {
+        let cutoff =
+            Utc::now().naive_utc() - chrono::Duration::minutes(Self::END_OF_GAME_GRACE_MINUTES);
+
+        let elapsed_cluster_ids: Vec<String> = self
+            .cluster_id_to_date
+            .iter()
+            .filter(|entry| *entry.value() < cutoff)
+            .map(|entry| entry.key().clone())
+            .collect();
+
+        for cluster_id in elapsed_cluster_ids {
+            self.end_cluster(&cluster_id);
         }
     }
 
@@ -90,9 +201,8 @@ impl ClusterService {
             }
 
             let mut found = false;
-            let mut modified = false;
             let game_id = game.id.clone();
-            let game_date = game.date.clone();
+            let game_date = game.date;
             let mut pending_game: Option<Game> = Some(game);
 
             if let Some(clusters) = self.clusters.get_mut(&game_date) {
@@ -101,7 +211,6 @@ impl ClusterService {
                     match Arc::make_mut(cluster).try_to_add_game(pending_game.take().unwrap()) {
                         Ok(_) => {
                             found = true;
-                            modified = true;
                             let game_ref = cluster
                                 .get_game(&game_id)
                                 .expect("no game after try to add with success");
@@ -112,12 +221,13 @@ impl ClusterService {
                                 .entry(cluster.key())
                                 .insert_entry(game_date);
                             arbitrages.append(&mut cluster.arbitrage_opportunites());
-                            self.market_history_service
-                                .update_market_history(&game_id, game_ref.markets());
-
-                            if cluster.game_count() > 1 {
-                                let _ = self.event_tx.send(cluster.clone());
+                            if let Some(market_service) = &self.market_service {
+                                market_service.send_new_market_update(&game_id, game_ref.markets());
                             }
+
+                            let _ = self.event_tx.send(cluster.clone());
+
+                            self.persist_cluster(Arc::clone(cluster));
 
                             break;
                         }
@@ -126,27 +236,22 @@ impl ClusterService {
                 }
             }
 
-            if modified {
-                self.emit_statistics_updated();
-            }
-
             if !found {
                 let game = pending_game.unwrap();
 
-                let cluster = FixtureCluster::new(game);
+                let cluster = Arc::new(FixtureCluster::new(game));
                 let cluster_key = cluster.key();
                 self.clusters
                     .entry(game_date)
-                    .or_insert_with(DashMap::new)
+                    .or_default()
                     .entry(cluster_key.clone())
-                    .or_insert(Arc::new(cluster));
+                    .or_insert(cluster.clone());
                 self.game_id_to_fixture_cluster_key
                     .entry(game_id)
                     .or_insert(cluster_key.clone());
                 self.cluster_id_to_date
                     .entry(cluster_key)
                     .insert_entry(game_date);
-                self.emit_statistics_updated();
             }
         }
 
@@ -161,29 +266,28 @@ impl ClusterService {
 
             if let Some(cluster_id) = self.game_id_to_fixture_cluster_key.get(game_id) {
                 self.clusters.entry(game.date).and_modify(|clusters_by_id| {
-                    clusters_by_id
-                        .entry(cluster_id.clone())
-                        .and_modify(|cluster| {
-                            if cluster.get_game(game_id).is_some() {
-                                Arc::make_mut(cluster).update_markets(
-                                    game_id,
-                                    game.markets().values().cloned().collect(),
-                                );
+                    if let Entry::Occupied(mut occupied) = clusters_by_id.entry(cluster_id.clone())
+                    {
+                        let cluster = occupied.get_mut();
+                        if cluster.get_game(game_id).is_some() {
+                            Arc::make_mut(cluster).update_markets(
+                                game_id,
+                                game.markets().values().cloned().collect(),
+                            );
 
-                                if cluster.game_count() > 1 {
-                                    let _ = self.event_tx.send(cluster.clone());
-                                }
+                            if cluster.game_count() > 1 {
+                                let _ = self.event_tx.send(cluster.clone());
+
+                                self.persist_cluster(Arc::clone(cluster));
                             }
-                        });
+
+                            arbitrages.append(&mut cluster.arbitrage_opportunites());
+                            if let Some(market_service) = &self.market_service {
+                                market_service.send_new_market_update(game_id, game.markets());
+                            }
+                        }
+                    }
                 });
-                self.emit_statistics_updated();
-                if let Some(clusters_by_date) = self.clusters.get(&game.date)
-                    && let Some(cluster) = clusters_by_date.value().get(cluster_id.as_str())
-                {
-                    arbitrages.append(&mut cluster.value().arbitrage_opportunites());
-                }
-                self.market_history_service
-                    .update_market_history(&game_id, game.markets());
             } else {
                 arbitrages.append(&mut self.add_games(vec![game]));
             }
@@ -193,32 +297,32 @@ impl ClusterService {
     }
 
     pub fn insert_markets(&self, game_id: &str, markets: Vec<Market>) -> Vec<Arbitrage> {
-        let mut modified = false;
         let mut arbitrages = Vec::new();
 
         if let Some(cluster_key_ref) = self.game_id_to_fixture_cluster_key.get(game_id)
             && let Some(game_date_ref) = self.cluster_id_to_date.get(cluster_key_ref.key())
-            && let Some(games_on_date_ref) = self.clusters.get_mut(game_date_ref.value())
-            && let Some(mut cluster_ref) = games_on_date_ref.value().get_mut(cluster_key_ref.key())
+            && let Some(clusters_on_date_ref) = self.clusters.get_mut(game_date_ref.value())
+            && let Some(mut cluster_ref) =
+                clusters_on_date_ref.value().get_mut(cluster_key_ref.key())
         {
             let cluster = cluster_ref.value_mut();
             if cluster.get_game(game_id).is_some() {
-                modified = true;
                 Arc::make_mut(cluster).update_markets(game_id, markets);
 
                 let game = cluster
                     .get_game(game_id)
                     .expect("failed to get game in insert markets");
                 let new_markets = game.markets();
-                self.market_history_service
-                    .update_market_history(&game_id, new_markets);
+                if let Some(market_service) = &self.market_service {
+                    market_service.send_new_market_update(game_id, new_markets);
+                }
+
+                if cluster.game_count() > 1 {
+                    self.persist_cluster(Arc::clone(&cluster));
+                }
 
                 arbitrages = cluster.arbitrage_opportunites();
             }
-        }
-
-        if modified {
-            self.emit_statistics_updated();
         }
 
         arbitrages
@@ -261,10 +365,6 @@ impl ClusterService {
         self.event_tx.subscribe()
     }
 
-    pub fn subscribe_to_cluster_statistics(&self) -> Receiver<Arc<StatisticsUpdated>> {
-        self.statistics_event_tx.subscribe()
-    }
-
     pub fn get_games(&self) -> Vec<Game> {
         self.clusters
             .iter()
@@ -301,19 +401,10 @@ impl ClusterService {
             })
             .collect()
     }
-
-    pub fn market_history_service(&self) -> Arc<MarketHistoryService> {
-        Arc::clone(&self.market_history_service)
-    }
 }
 
 pub enum ClusterServiceErrors {
     ClusterNotFound,
-}
-
-#[derive(Debug, Clone)]
-pub struct StatisticsUpdated {
-    pub statistics: HashMap<(MarketType, Outcome), StatisticsValues>,
 }
 
 impl fmt::Display for ClusterService {

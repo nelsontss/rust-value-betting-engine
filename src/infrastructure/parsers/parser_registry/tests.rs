@@ -11,10 +11,7 @@ fn today_ms() -> i64 {
 #[test]
 fn new_registers_all_platform_parsers() {
     let registry = ParserRegistry::new();
-    let betano_result = registry.parse(
-        &Platform::Betano,
-        json!({"blocks": [{"events": []}]}),
-    );
+    let betano_result = registry.parse(&Platform::Betano, json!({"blocks": [{"events": []}]}));
     assert!(betano_result.is_some());
     assert_eq!(betano_result.unwrap().len(), 0);
 

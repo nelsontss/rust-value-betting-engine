@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
-use crate::domain::services::backtesting::{BacktestMetrics, DrawValueStrategy, PriceCandle, TradeSimulator};
+use crate::domain::services::backtesting::{
+    BacktestMetrics, DrawValueStrategy, PriceCandle, TradeSimulator,
+};
 use crate::infrastructure::repositories::PolymarketRepository;
+use crate::shared::error::Result;
 
 pub struct BacktestConfig {
     pub resolution_minutes: u32,
@@ -15,7 +18,7 @@ impl BacktestRunner {
     pub async fn run(
         repo: &PolymarketRepository,
         config: &BacktestConfig,
-    ) -> Result<BacktestMetrics, Box<dyn std::error::Error>> {
+    ) -> Result<BacktestMetrics> {
         let markets = repo.get_draw_markets().await?;
 
         let mut candles_map: HashMap<String, Vec<PriceCandle>> = HashMap::new();

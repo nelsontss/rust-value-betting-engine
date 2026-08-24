@@ -20,6 +20,9 @@ pub struct FixtureCluster {
     market_type_to_game_ids: HashMap<MarketType, HashSet<String>>,
     updated_at: DateTime<Utc>,
     representative_game: Option<Game>,
+    diffs: HashMap<(MarketType, Outcome), Vec<f64>>,
+    mean_diffs: HashMap<(MarketType, Outcome), f64>,
+    closed: bool,
 }
 
 impl FixtureCluster {
@@ -36,9 +39,41 @@ impl FixtureCluster {
             market_type_to_game_ids: HashMap::new(),
             updated_at: chrono::Utc::now(),
             representative_game: Some(game.clone()),
+            diffs: HashMap::new(),
+            mean_diffs: HashMap::new(),
+            closed: false,
         };
 
         fixture_cluster.add_game(game);
+
+        fixture_cluster
+    }
+
+    pub fn from_persisted(
+        key: String,
+        games: Vec<Game>,
+        updated_at: DateTime<Utc>,
+        mean_diffs: HashMap<(MarketType, Outcome), f64>,
+        closed: bool,
+    ) -> Self {
+        let mut fixture_cluster = FixtureCluster {
+            key,
+            games: HashMap::new(),
+            market_type_to_game_ids: HashMap::new(),
+            updated_at,
+            representative_game: None,
+            diffs: HashMap::new(),
+            mean_diffs,
+            closed,
+        };
+
+        // Reconstructing a persisted cluster must not fabricate tick history;
+        // games are inserted without recording diffs.
+        for game in games {
+            fixture_cluster.insert_game(game);
+        }
+
+        fixture_cluster.updated_at = updated_at;
 
         fixture_cluster
     }
@@ -68,6 +103,11 @@ impl FixtureCluster {
     }
 
     fn add_game(&mut self, game: Game) {
+        self.insert_game(game);
+        self.record_live_diffs();
+    }
+
+    fn insert_game(&mut self, game: Game) {
         let market_types = game.markets().keys().cloned().collect::<Vec<_>>();
         let game_id = game.id.clone();
 
@@ -86,6 +126,15 @@ impl FixtureCluster {
             }
 
             self.updated_at = chrono::Utc::now();
+        }
+    }
+
+    fn record_live_diffs(&mut self) {
+        for ((market_type, outcome), diff) in self.live_statistics_diffs() {
+            self.diffs
+                .entry((market_type, outcome))
+                .or_default()
+                .push(diff);
         }
     }
 
@@ -108,6 +157,8 @@ impl FixtureCluster {
                     .or_default()
                     .insert(game_id.to_string());
             }
+
+            self.record_live_diffs();
 
             self.updated_at = chrono::Utc::now();
         }
@@ -140,7 +191,26 @@ impl FixtureCluster {
         Some(group)
     }
 
+    /// Diffs concluídos da fixture: as médias persistidas quando a fixture
+    /// foi carregada da BD, ou a média dos ticks acumulados em memória.
     pub fn statistics_diffs(&self) -> HashMap<(MarketType, Outcome), f64> {
+        if !self.mean_diffs.is_empty() {
+            return self.mean_diffs.clone();
+        } else if !self.diffs.is_empty() {
+            return self
+                .diffs
+                .iter()
+                .map(|(key, v)| {
+                    let sum: f64 = v.iter().sum();
+                    (key.clone(), sum / v.len() as f64)
+                })
+                .collect();
+        }
+
+        HashMap::new()
+    }
+
+    pub fn live_statistics_diffs(&self) -> HashMap<(MarketType, Outcome), f64> {
         self.market_type_to_game_ids
             .iter()
             .flat_map(|(market_type, _)| {
@@ -148,14 +218,14 @@ impl FixtureCluster {
                     .outcomes()
                     .into_iter()
                     .filter_map(move |outcome| {
-                        self.diff_for_outcome(market_type, &outcome)
+                        self.live_diff_for_outcome(market_type, &outcome)
                             .map(|diff| ((market_type.clone(), outcome), diff))
                     })
             })
             .collect()
     }
 
-    fn diff_for_outcome(&self, market_type: &MarketType, outcome: &Outcome) -> Option<f64> {
+    fn live_diff_for_outcome(&self, market_type: &MarketType, outcome: &Outcome) -> Option<f64> {
         let mut poly_value: Option<f64> = None;
         let mut other_values: Vec<f64> = Vec::new();
 
@@ -209,6 +279,17 @@ impl FixtureCluster {
 
     pub fn updated_at(&self) -> DateTime<Utc> {
         self.updated_at.clone()
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed
+    }
+
+    pub fn close(&mut self) {
+        if !self.closed {
+            self.closed = true;
+            self.updated_at = chrono::Utc::now();
+        }
     }
 
     pub fn get_game(&self, game_id: &str) -> Option<&Game> {

@@ -295,3 +295,46 @@
        28.3 [X] Add `BacktestRunner` over stored OHLCV candles with a `backtest` CLI command
        28.4 [X] Add `DrawTimeDecay` trade bot: today's draw markets with volume filter, scheduled buy ~10min before kickoff, auto-sell, resume of open trades on restart
        28.5 [X] Expose `draw-trade` CLI command with `--paper` mode
+
+29. [X] Bwin platform integration
+
+        29.1 [X] Add `Platform::Bwin` variant with serde round-trip tests
+        29.2 [X] Create `BwinParser` for SignalR `FixtureUpdate` payloads with test coverage
+        29.3 [X] Create `BwinConnector`: one-shot fixtures fetch + SignalR WebSocket subscription per fixture topic
+        29.4 [X] Wire `BwinConnector` into `BookmakerScrapperService::run`
+        29.5 [X] Expose Bwin via `/platforms` route
+
+30. [X] Market history persistence
+
+        30.1 [X] Add `MarketDataPoint` entity for timestamped market snapshots
+        30.2 [X] Add `GameRepository` on SQLite with `games`/market-point tables and migrations
+        30.3 [X] Replace `market_history_service` with `MarketService` broadcasting new market updates over a broadcast channel
+        30.4 [X] Serve per-game market history via `GET /market-history` backed by `GameRepository`
+
+31. [X] Cluster and statistics persistence refactor
+
+        31.1 [X] Add `FixtureClusterRepository` on SQLite persisting clusters and computed diffs
+        31.2 [X] Extract `StatisticsService` from cluster statistics aggregation
+        31.3 [X] Rebuild historical diff distributions from persisted diffs at startup, then update incrementally via `DashMap`
+        31.4 [X] Update SSE statistics endpoint to consume `StatisticsService`
+
+32. [X] Frontend statistics dashboard
+
+        32.1 [X] Add `/statistics` route and `StatisticsPage` component
+        32.2 [X] Add `useClusterStatistics` hook and statistics types
+        32.3 [X] Refactor clusters view into `ClusterTable` + `ClusterInspector`
+        32.4 [X] Capture UI spec in `web-app/section-dashboard-snapshot.md`
+
+33. [ ] Value alerts (see `docs/alerts.md`)
+
+        33.1 [ ] Wire draft `ValueAlert` entity into the domain module tree
+        33.2 [ ] Track per-outcome rolling percentile state per cluster in `ClusterService`
+        33.3 [ ] Emit alert when Polymarket-vs-bookie diff crosses p90/p10 threshold (bet NO / bet YES) with hysteresis
+
+34. [ ] Live (in-play) data from all platforms (see `docs/live-data-plan.md`)
+
+        34.1 [ ] Add `Phase { PreMatch, Live }` field to the `Game` entity set by parsers
+        34.2 [ ] Betano: discover live coupon API and poll it from the Chrome extension alongside today's games
+        34.3 [ ] LeBull: discover live endpoint, add `LIVE_URL` polling in `LeBullConnector`, parse without the `isLive` skip
+        34.4 [ ] Bwin: follow `MainToLiveUpdate` fixture switch to live topics and mark updates as live
+        34.5 [ ] Gate diff/statistics computation on matching phases; define stale-game retention policy

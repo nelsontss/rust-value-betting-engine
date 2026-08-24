@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
 
-use dashmap::DashMap;
 use serde::Serialize;
 
 use crate::{
@@ -31,13 +30,12 @@ pub struct MarketHistoryResponse {
     markets_by_type: HashMap<String, Vec<MarketDataPointResponse>>,
 }
 
-impl From<(&str, &DashMap<MarketType, Vec<Arc<MarketDataPoint>>>)> for MarketHistoryResponse {
-    fn from((game_id, markets): (&str, &DashMap<MarketType, Vec<Arc<MarketDataPoint>>>)) -> Self {
+impl From<(&str, &HashMap<MarketType, Vec<Arc<MarketDataPoint>>>)> for MarketHistoryResponse {
+    fn from((game_id, markets): (&str, &HashMap<MarketType, Vec<Arc<MarketDataPoint>>>)) -> Self {
         let mut markets_response: HashMap<String, Vec<MarketDataPointResponse>> = HashMap::new();
-        for entry_ref in markets.iter() {
-            let key = entry_ref.key().variant_name().to_string();
-            let points: Vec<MarketDataPointResponse> = entry_ref
-                .value()
+        for (market_type, points) in markets {
+            let key = market_type.variant_name().to_string();
+            let points: Vec<MarketDataPointResponse> = points
                 .iter()
                 .map(|dp| MarketDataPointResponse::from((game_id, dp)))
                 .collect();

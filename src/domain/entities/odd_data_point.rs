@@ -16,6 +16,10 @@ impl MarketDataPoint {
         }
     }
 
+    pub fn new_with_datetime(market: Market, datetime: DateTime<Utc>) -> Self {
+        MarketDataPoint { market, datetime }
+    }
+
     pub fn market(&self) -> &Market {
         &self.market
     }

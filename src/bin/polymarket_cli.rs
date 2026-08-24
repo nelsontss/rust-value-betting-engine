@@ -6,7 +6,8 @@ use num_traits::cast::ToPrimitive;
 use polymarket_client_sdk_v2::gamma::Client as GammaClient;
 use polymarket_client_sdk_v2::gamma::types::request::EventsRequest;
 use reqwest::Client as HttpClient;
-use rust_value_betting_engine::infrastructure::repositories::PolymarketRepository;
+use rust_value_betting_engine::infrastructure::repositories::{PolymarketRepository, connect_pool};
+use rust_value_betting_engine::shared::error::Result;
 use serde::Deserialize;
 use serde_json;
 
@@ -100,7 +101,9 @@ fn parse_date(s: Option<String>) -> Option<DateTime<Utc>> {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
+    let _ = dotenvy::dotenv();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
@@ -109,7 +112,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
 
-    let repo = PolymarketRepository::new(&cli.db_path).await?;
+    let pool = connect_pool(&cli.db_path).await?;
+    let repo = PolymarketRepository::from_pool(pool.clone());
     repo.run_migrations().await?;
 
     match cli.command {
@@ -149,7 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             handle_backtest(&repo, resolution_minutes).await?;
         }
         Command::DrawTrade { paper } => {
-            handle_execute_draw_trade_strategy(paper).await;
+            handle_execute_draw_trade_strategy(pool.clone(), paper).await;
         }
     }
 
@@ -162,7 +166,7 @@ async fn handle_fetch_matches(
     maybe_start_date_max_str: Option<String>,
     limit: u32,
     offset: u32,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let gamma = GammaClient::default();
     let maybe_start_date_min = parse_date(maybe_start_date_min_str);
     let maybe_start_date_max = parse_date(maybe_start_date_max_str);
@@ -265,7 +269,7 @@ async fn handle_fetch_prices(
     from: Option<String>,
     to: Option<String>,
     resolution: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let api_key =
         std::env::var("PMXT_API_KEY").map_err(|_| "PMXT_API_KEY not set in environment or .env")?;
 
@@ -406,7 +410,7 @@ async fn fetch_ohlcv(
     resolution: &str,
     start: Option<i64>,
     end: Option<i64>,
-) -> Result<Vec<PriceCandle>, Box<dyn std::error::Error>> {
+) -> Result<Vec<PriceCandle>> {
     let mut url = format!(
         "https://api.pmxt.dev/api/polymarket/fetchOHLCV?outcomeId={}&resolution={}",
         outcome_id, resolution
@@ -492,7 +496,7 @@ async fn handle_list(
     from: Option<String>,
     to: Option<String>,
     desc: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let from = from.unwrap_or_else(|| "1970-01-01".to_string());
     let to = to.unwrap_or_else(|| "2099-12-31".to_string());
 
@@ -514,13 +518,13 @@ async fn handle_list(
     Ok(())
 }
 
-async fn handle_info(repo: &PolymarketRepository) -> Result<(), Box<dyn std::error::Error>> {
+async fn handle_info(repo: &PolymarketRepository) -> Result<()> {
     let count = repo.event_count().await?;
     println!("Events in DB: {}", count);
     Ok(())
 }
 
-async fn handle_backup(db_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn handle_backup(db_path: &str) -> Result<()> {
     let now = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let backup_dir = format!("db/backups/{}", now);
     std::fs::create_dir_all(&backup_dir)?;
@@ -543,10 +547,7 @@ async fn handle_backup(db_path: &str) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
-async fn handle_backtest(
-    repo: &PolymarketRepository,
-    resolution_minutes: u32,
-) -> Result<(), Box<dyn std::error::Error>> {
+async fn handle_backtest(repo: &PolymarketRepository, resolution_minutes: u32) -> Result<()> {
     use rust_value_betting_engine::application::backtesting::backtest_runner::{
         BacktestConfig, BacktestRunner,
     };
@@ -571,10 +572,10 @@ async fn handle_backtest(
     Ok(())
 }
 
-async fn handle_execute_draw_trade_strategy(paper: bool) {
+async fn handle_execute_draw_trade_strategy(pool: sqlx::SqlitePool, paper: bool) {
     use rust_value_betting_engine::application::services::trading::draw_trade_bot::DrawTradeBot;
 
-    let mut draw_trade_bot = match DrawTradeBot::default().await {
+    let mut draw_trade_bot = match DrawTradeBot::new(pool).await {
         Ok(bot) => bot,
         Err(e) => {
             tracing::error!("Failed to initialize trade bot: {e}");

@@ -1,4 +1,15 @@
-use crate::domain::services::quantile_multiset::QuantileMultiset;
+use std::collections::HashMap;
+
+use crate::domain::{
+    entities::{MarketType, Outcome},
+    services::quantile_multiset::QuantileMultiset,
+};
+
+/// Broadcast payload with the statistics snapshot per (market_type, outcome).
+#[derive(Debug, Clone)]
+pub struct StatisticsUpdated {
+    pub statistics: HashMap<(MarketType, Outcome), StatisticsValues>,
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct ClusterStatistics {

@@ -1,8 +1,8 @@
 use chrono::{DateTime, TimeDelta};
 use serde_json::Value;
 
-use crate::domain::entities::{Market, Platform};
 use crate::domain::Game;
+use crate::domain::entities::{Market, Platform};
 
 #[cfg(test)]
 mod tests;

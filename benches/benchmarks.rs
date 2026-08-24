@@ -8,10 +8,11 @@ use tokio::runtime::Runtime;
 use rust_value_betting_engine::domain::{
     ClusterService, Game,
     entities::{Market, MarketType, Platform},
-    services::market_history_service::MarketHistoryService,
+    services::market_service::MarketService,
 };
 use rust_value_betting_engine::infrastructure::{
     parsers::{betano_parser::BetanoParser, lebull_parser::LeBullParser},
+    repositories::{connect_pool, game_repository::GameRepository},
     server::dto::cluster_response::ClusterResponse,
 };
 
@@ -121,11 +122,7 @@ fn generate_games(count: usize, with_markets: bool, distinct: bool) -> Vec<Game>
 }
 
 /// Load a ClusterService with a certain number of games.
-fn load_service(
-    game_count: usize,
-    with_markets: bool,
-    distinct: bool,
-) -> Arc<ClusterService> {
+fn load_service(game_count: usize, with_markets: bool, distinct: bool) -> Arc<ClusterService> {
     let games = generate_games(game_count, with_markets, distinct);
     let service = ClusterService::new();
     service.insert_games(games);
@@ -623,9 +620,9 @@ fn bench_sse_concurrent_connections(c: &mut Criterion) {
                                             black_box(&cluster);
                                             total += 1;
                                         }
-                                        Err(
-                                            tokio::sync::broadcast::error::TryRecvError::Empty,
-                                        ) => break,
+                                        Err(tokio::sync::broadcast::error::TryRecvError::Empty) => {
+                                            break;
+                                        }
                                         Err(_) => break,
                                     }
                                 }
@@ -693,7 +690,7 @@ fn bench_cross_platform_clustering(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
-// Benchmark: Market History — update throughput
+// Benchmark: Market History — update throughput (send_new_market_update)
 // ---------------------------------------------------------------------------
 
 /// Generate game_id → market map pairs for market history benchmarks.
@@ -725,7 +722,24 @@ fn generate_market_data(count: usize) -> Vec<(String, HashMap<MarketType, Market
         .collect()
 }
 
+/// A DB-backed MarketService wired to an in-memory Sqlite pool. The repository
+/// is only used to satisfy the service constructor; no migrations are run.
+fn market_service_with_memory_db() -> Arc<MarketService> {
+    let rt = Runtime::new().expect("tokio runtime");
+    rt.block_on(async {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("could not create in-memory db");
+
+        Arc::new(MarketService::new(Arc::new(GameRepository::from_pool(
+            pool,
+        ))))
+    })
+}
+
 fn bench_market_history_update(c: &mut Criterion) {
+    let service = market_service_with_memory_db();
+
     let mut group = c.benchmark_group("market_history/update");
     group.sampling_mode(SamplingMode::Auto);
 
@@ -737,9 +751,8 @@ fn bench_market_history_update(c: &mut Criterion) {
             &market_data,
             |b, data| {
                 b.iter(|| {
-                    let service = MarketHistoryService::default();
                     for (game_id, markets) in data {
-                        service.update_market_history(black_box(game_id), black_box(markets));
+                        service.send_new_market_update(black_box(game_id), black_box(markets));
                     }
                     black_box(());
                 });
@@ -750,35 +763,72 @@ fn bench_market_history_update(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
-// Benchmark: Market History — query latency (get_game_history)
+// Benchmark: Market History — query latency (get_game_markets_history)
 // ---------------------------------------------------------------------------
 
 fn bench_market_history_get_game_history(c: &mut Criterion) {
+    let rt = Runtime::new().expect("tokio runtime");
+
     let mut group = c.benchmark_group("market_history/get_game_history");
     group.sampling_mode(SamplingMode::Auto);
 
-    for game_count in [10, 100, 500, 2000] {
-        let market_data = generate_market_data(game_count);
-        let (service, target_id) = {
-            let svc = MarketHistoryService::default();
-            let target = market_data
-                .first()
-                .map(|(id, _)| id.clone())
-                .unwrap_or_default();
-            for (game_id, markets) in &market_data {
-                svc.update_market_history(game_id, markets);
-            }
-            (Arc::new(svc), target)
-        };
+    for history_size in [10, 100, 500, 2000] {
+        let (service, game_id) = rt.block_on(async {
+            let pool = connect_pool(&format!(
+                "{}/market_history_get_game_history_bench.db",
+                std::env::temp_dir().display()
+            ))
+            .await
+            .expect("could not create bench db");
+            let repository = Arc::new(GameRepository::from_pool(pool));
+            repository
+                .run_migrations()
+                .await
+                .expect("bench migrations failed");
 
+            let game = Game::new(
+                "FC Porto",
+                "SL Benfica",
+                "Portugal",
+                "Liga Portugal",
+                fixture_date(0, 15, 30),
+                Platform::Betano,
+                vec![
+                    Market::total("mh-t", 2.5, 1.85, 1.95).unwrap(),
+                    Market::moneyline("mh-ml", 1.8, 2.0).unwrap(),
+                ],
+            );
+            repository
+                .insert_game(&game)
+                .await
+                .expect("bench game insert failed");
+            for _ in 1..history_size {
+                repository
+                    .update_game(&game)
+                    .await
+                    .expect("bench game update failed");
+            }
+
+            let service = Arc::new(MarketService::new(repository));
+
+            (service, game.id.clone())
+        });
+
+        group.throughput(Throughput::Elements(history_size as u64));
         group.bench_with_input(
-            criterion::BenchmarkId::from_parameter(game_count),
-            &(service, target_id),
+            criterion::BenchmarkId::from_parameter(history_size),
+            &(service, game_id),
             |b, (svc, gid)| {
                 let gid = gid.clone();
-                b.iter(|| {
-                    let result = svc.get_game_history(black_box(&gid));
-                    black_box(result.is_some());
+                b.to_async(&rt).iter(|| {
+                    let gid = gid.clone();
+                    async move {
+                        let result = svc
+                            .get_game_markets_history(black_box(&gid))
+                            .await
+                            .expect("history query failed");
+                        black_box(result);
+                    }
                 });
             },
         );
@@ -787,11 +837,12 @@ fn bench_market_history_get_game_history(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
-// Benchmark: Market History — concurrent update + broadcast throughput
+// Benchmark: Market History — broadcast throughput
 // ---------------------------------------------------------------------------
 
 fn bench_market_history_broadcast(c: &mut Criterion) {
     let rt = Runtime::new().expect("tokio runtime");
+    let service = market_service_with_memory_db();
 
     let mut group = c.benchmark_group("market_history/broadcast");
     group.sampling_mode(SamplingMode::Auto);
@@ -799,9 +850,13 @@ fn bench_market_history_broadcast(c: &mut Criterion) {
     for &subscribers in &[10, 100, 1000] {
         for &game_count in &[1, 10, 50] {
             let market_data = generate_market_data(game_count);
+            let markets_per_game: usize = market_data
+                .first()
+                .map(|(_, markets)| markets.len())
+                .unwrap_or(0);
 
-            // Total deliveries = subscribers × game_count (each game update broadcasts once)
-            let total_deliveries = subscribers * game_count;
+            // Each game update broadcasts once per market.
+            let total_deliveries = subscribers * game_count * markets_per_game;
 
             group.throughput(Throughput::Elements(total_deliveries.max(1) as u64));
             group.bench_with_input(
@@ -813,23 +868,21 @@ fn bench_market_history_broadcast(c: &mut Criterion) {
                 |b, (data, subs)| {
                     let subs = *subs;
                     let data = data.clone();
+                    let service = Arc::clone(&service);
                     b.to_async(&rt).iter(move || {
                         let data = data.clone();
+                        let service = Arc::clone(&service);
                         async move {
-                            let service = MarketHistoryService::default();
-
                             // 1. Register subscribers
                             let mut receivers = Vec::with_capacity(subs);
                             for _ in 0..subs {
-                                receivers.push(service.subscribe_to_game_history_updates());
+                                receivers.push(service.subscribe_to_game_market_updates());
                             }
 
-                            // 2. Push market updates — each triggers a broadcast
+                            // 2. Push market updates — each market triggers a broadcast
                             for (game_id, markets) in &data {
-                                service.update_market_history(
-                                    black_box(game_id),
-                                    black_box(markets),
-                                );
+                                service
+                                    .send_new_market_update(black_box(game_id), black_box(markets));
                             }
 
                             // 3. Drain all receivers
@@ -838,12 +891,12 @@ fn bench_market_history_broadcast(c: &mut Criterion) {
                                 loop {
                                     match rx.try_recv() {
                                         Ok(msg) => {
-                                            black_box(&msg);
+                                            black_box(msg);
                                             total += 1;
                                         }
-                                        Err(
-                                            tokio::sync::broadcast::error::TryRecvError::Empty,
-                                        ) => break,
+                                        Err(tokio::sync::broadcast::error::TryRecvError::Empty) => {
+                                            break;
+                                        }
                                         Err(_) => break,
                                     }
                                 }

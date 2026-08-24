@@ -14,6 +14,7 @@ use crate::{
     },
     shared::error::Result,
 };
+use sqlx::SqlitePool;
 
 pub struct DrawTradeBot {
     provider: Arc<PolymarketProvider>,
@@ -22,19 +23,23 @@ pub struct DrawTradeBot {
 }
 
 impl DrawTradeBot {
-    pub async fn default() -> Result<Self> {
-        Ok(DrawTradeBot {
-            provider: Arc::new(PolymarketProvider::default().await?),
+    pub async fn new(pool: SqlitePool) -> Result<Self> {
+        let draw_trade_bot = DrawTradeBot {
+            provider: Arc::new(PolymarketProvider::new(pool.clone()).await?),
             handles: Vec::new(),
-            trade_repository: TradeRepository::new().await?,
-        })
+            trade_repository: TradeRepository::from_pool(pool),
+        };
+
+        draw_trade_bot.trade_repository.run_migrations().await?;
+
+        Ok(draw_trade_bot)
     }
 
     async fn resume_open_trades(&self) {
         let open_trades = match self.trade_repository.get_open_trades().await {
             Ok(trades) => trades,
-            Err(_) => {
-                tracing::error!("Error getting open_trades");
+            Err(e) => {
+                tracing::error!("Error getting open_trades {}", e);
                 return;
             }
         };

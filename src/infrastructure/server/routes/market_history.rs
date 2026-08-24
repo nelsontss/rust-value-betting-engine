@@ -23,18 +23,30 @@ pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Path(game_id): Path<String>,
 ) -> Result<Json<MarketHistoryResponse>, StatusCode> {
-    if let Some(markets_ref) = app_state.market_history_service.get_game_history(&game_id) {
-        let markets = markets_ref.value();
-
-        return Ok(Json(MarketHistoryResponse::from((
+    match app_state
+        .market_service
+        .get_game_markets_history(&game_id)
+        .await
+    {
+        Ok(Some(markets)) => Ok(Json(MarketHistoryResponse::from((
             game_id.as_str(),
-            markets,
-        ))));
+            &markets,
+        )))),
+        Ok(None) => {
+            println!("Game not found");
+
+            Err(StatusCode::NOT_FOUND)
+        }
+        Err(err) => {
+            tracing::error!(
+                error = %err,
+                game_id = %game_id,
+                "failed to load market history"
+            );
+
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
-
-    println!("Game not found");
-
-    Err(StatusCode::NOT_FOUND)
 }
 
 #[debug_handler]
@@ -42,9 +54,7 @@ pub async fn sse_get(
     State(app_state): State<Arc<AppState>>,
     Path(game_id): Path<String>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let mut rx = app_state
-        .market_history_service
-        .subscribe_to_game_history_updates();
+    let mut rx = app_state.market_service.subscribe_to_game_market_updates();
     let stream = async_stream::stream! {
         loop {
             match rx.recv().await {

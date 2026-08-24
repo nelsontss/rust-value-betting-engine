@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::domain::entities::{Market, Platform};
 use crate::infrastructure::parsers::bwin_parser::{BwinParser, BwinWSEvent, SignalRFrame};
@@ -275,7 +275,10 @@ fn parse_ws_event_option_market_delete() {
     let data = r#"{"type":1,"target":"Receive","invocationId":"0","arguments":[{"messageType":"OptionMarketDelete","payload":{"marketId":42,"fixtureId":"f1"}}]}"#;
     let event = BwinParser::parse_ws_event(data).unwrap();
     match event {
-        BwinWSEvent::OptionMarketDelete { market_id, fixture_id } => {
+        BwinWSEvent::OptionMarketDelete {
+            market_id,
+            fixture_id,
+        } => {
             assert_eq!(market_id, 42);
             assert_eq!(fixture_id, "f1");
         }

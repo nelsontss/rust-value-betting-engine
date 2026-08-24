@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 
 use crate::domain::{
     Platform,
@@ -701,66 +701,61 @@ fn insert_games_creates_new_cluster_for_unknown_distinct_fixture() {
             .contains_key(&new_game_id)
     );
 }
+#[tokio::test]
+async fn sweep_ended_clusters_removes_only_elapsed_fixtures() {
+    let now = Utc::now().naive_utc();
 
-#[test]
-fn add_games_emits_statistics_updated_for_each_outcome() {
-    let poly_game = porto_benfica_with_markets(
-        Platform::Polymarket,
-        vec![total_market("poly-total", 2.5, 2.0, 2.0)],
-    );
-    let betano_game = porto_benfica_with_markets(
+    let past_betano = Game::new(
+        "Benfica",
+        "Sporting",
+        "Portugal",
+        "Primeira Liga",
+        now - Duration::minutes(150),
         Platform::Betano,
-        vec![total_market("betano-total", 2.5, 1.9, 2.1)],
+        vec![],
+    );
+    let past_polymarket = Game::new(
+        "Benfica",
+        "Sporting",
+        "Portugal",
+        "Primeira Liga",
+        now - Duration::minutes(150),
+        Platform::Polymarket,
+        vec![],
+    );
+    let future_game = Game::new(
+        "Porto",
+        "Braga",
+        "Portugal",
+        "Primeira Liga",
+        now + Duration::hours(2),
+        Platform::Betano,
+        vec![],
     );
 
     let cluster_service = ClusterService::new();
-    let mut rx = cluster_service.subscribe_to_cluster_statistics();
+    cluster_service.add_games(vec![past_betano.clone(), past_polymarket, future_game]);
+    assert_cluster_sizes(&cluster_service, &[1, 2]);
 
-    cluster_service.add_games(vec![poly_game, betano_game]);
+    cluster_service.sweep_ended_clusters();
 
-    let mut update = None;
-    while let Ok(latest) = rx.try_recv() {
-        update = Some(latest);
-    }
-
-    let update = update.expect("expected statistics update");
-    assert_eq!(2, update.statistics.len());
-    for values in update.statistics.values() {
-        assert_eq!(1, values.samples);
-    }
-}
-
-#[test]
-fn insert_games_emits_statistics_updated_on_update() {
-    let poly_game = porto_benfica_with_markets(
-        Platform::Polymarket,
-        vec![total_market("poly-total", 2.5, 2.0, 2.0)],
+    // elapsed fixture removed from every index
+    assert!(
+        cluster_service
+            .get_cluster(&past_betano.canonical_name())
+            .is_err()
     );
-    let first_game = porto_benfica_with_markets(
-        Platform::Betano,
-        vec![total_market("betano-total", 2.5, 1.9, 2.1)],
+    assert!(
+        !cluster_service
+            .game_id_to_fixture_cluster_key
+            .contains_key(&past_betano.id)
+    );
+    assert!(
+        !cluster_service
+            .cluster_id_to_date
+            .contains_key(&past_betano.canonical_name())
     );
 
-    let cluster_service = ClusterService::new();
-    let mut rx = cluster_service.subscribe_to_cluster_statistics();
-
-    cluster_service.add_games(vec![first_game.clone(), poly_game]);
-
-    while rx.try_recv().is_ok() {}
-
-    let mut updated_first_game = first_game;
-    updated_first_game.update_markets(vec![total_market("betclic-total", 2.5, 1.8, 2.2)]);
-
-    cluster_service.insert_games(vec![updated_first_game]);
-
-    let mut update = None;
-    while let Ok(latest) = rx.try_recv() {
-        update = Some(latest);
-    }
-
-    let update = update.expect("expected statistics update");
-    assert_eq!(2, update.statistics.len());
-    for values in update.statistics.values() {
-        assert_eq!(1, values.samples);
-    }
+    // upcoming fixtures remain untouched
+    assert_cluster_sizes(&cluster_service, &[1]);
 }

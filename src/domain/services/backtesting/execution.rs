@@ -23,8 +23,14 @@ impl TradeSimulator {
         }
 
         let total_trades = all_signals.len();
-        let winning_trades = all_signals.iter().filter(|s| s.exit_price > s.entry_price).count();
-        let losing_trades = all_signals.iter().filter(|s| s.exit_price <= s.entry_price).count();
+        let winning_trades = all_signals
+            .iter()
+            .filter(|s| s.exit_price > s.entry_price)
+            .count();
+        let losing_trades = all_signals
+            .iter()
+            .filter(|s| s.exit_price <= s.entry_price)
+            .count();
         let win_rate = if total_trades > 0 {
             winning_trades as f64 / total_trades as f64
         } else {
@@ -62,10 +68,7 @@ impl TradeSimulator {
 
         let sharpe_ratio = if returns.len() > 1 {
             let mean = returns.iter().sum::<f64>() / returns.len() as f64;
-            let variance = returns
-                .iter()
-                .map(|r| (r - mean).powi(2))
-                .sum::<f64>()
+            let variance = returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>()
                 / (returns.len() as f64 - 1.0);
             let std_dev = variance.sqrt();
             if std_dev > 0.0 {

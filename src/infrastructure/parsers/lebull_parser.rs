@@ -2,8 +2,8 @@ use chrono::{DateTime, TimeDelta, Utc};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use crate::domain::entities::{Market, Platform};
 use crate::domain::Game;
+use crate::domain::entities::{Market, Platform};
 
 #[cfg(test)]
 mod tests;
@@ -24,8 +24,14 @@ impl LeBullParser {
         let mut games = vec![];
 
         for league in leagues {
-            let country = league.get("countryName").and_then(|v| v.as_str()).unwrap_or("");
-            let competition = league.get("leagueName").and_then(|v| v.as_str()).unwrap_or("");
+            let country = league
+                .get("countryName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let competition = league
+                .get("leagueName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
 
             let events = match league.get("games").and_then(|e| e.as_array()) {
                 Some(events) => events,
@@ -48,7 +54,11 @@ impl LeBullParser {
                     None => continue,
                 };
 
-                if event.get("isLive").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if event
+                    .get("isLive")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
                     continue;
                 }
 
@@ -57,20 +67,20 @@ impl LeBullParser {
                 let stake_types = match event.get("stakeTypes").and_then(|m| m.as_array()) {
                     Some(m) => m,
                     None => {
-                let game = Game::new_with_id(
-                    &event_id,
-                    team_a,
-                    team_b,
-                    country,
-                    competition,
-                    date,
-                    Platform::LeBull,
-                    vec![],
-                );
-                if is_today_or_tomorrow(&game) {
-                    games.push(game);
-                }
-                continue;
+                        let game = Game::new_with_id(
+                            &event_id,
+                            team_a,
+                            team_b,
+                            country,
+                            competition,
+                            date,
+                            Platform::LeBull,
+                            vec![],
+                        );
+                        if is_today_or_tomorrow(&game) {
+                            games.push(game);
+                        }
+                        continue;
                     }
                 };
 

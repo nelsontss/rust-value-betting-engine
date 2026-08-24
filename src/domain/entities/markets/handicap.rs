@@ -13,6 +13,10 @@ pub struct HandicapMarket {
 }
 
 impl HandicapMarket {
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
     pub fn new(id: &str, line: Line, home: Odd, draw: Odd, away: Odd) -> Self {
         Self {
             id: id.to_string(),

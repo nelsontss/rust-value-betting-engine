@@ -22,6 +22,7 @@ use crate::domain::entities::trade::{Trade, TradeStrategy};
 use crate::infrastructure::config::trade_config::TradeConfig;
 use crate::infrastructure::repositories::trade_repository::TradeRepository;
 use crate::shared::error::Result;
+use sqlx::SqlitePool;
 
 pub struct PolymarketProvider {
     clob_client: Client<Authenticated<Normal>>,
@@ -31,7 +32,7 @@ pub struct PolymarketProvider {
 }
 
 impl PolymarketProvider {
-    pub async fn default() -> Result<Self> {
+    pub async fn new(pool: SqlitePool) -> Result<Self> {
         let key: String = std::env::var(PRIVATE_KEY_VAR)?;
         let signer = LocalSigner::from_str(&key)?.with_chain_id(Some(POLYGON));
 
@@ -43,7 +44,7 @@ impl PolymarketProvider {
         Ok(PolymarketProvider {
             clob_client: client,
             signer,
-            trade_repository: TradeRepository::new().await?,
+            trade_repository: TradeRepository::from_pool(pool),
             gamma_client: polymarket_client_sdk_v2::gamma::Client::default(),
         })
     }

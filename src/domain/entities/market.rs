@@ -158,6 +158,22 @@ pub enum Outcome {
     DrawOrAway,
 }
 
+impl Outcome {
+    pub fn from_key_string(value: &str) -> Option<Self> {
+        match value {
+            "Home" => Some(Outcome::Home),
+            "Draw" => Some(Outcome::Draw),
+            "Away" => Some(Outcome::Away),
+            "Over" => Some(Outcome::Over),
+            "Under" => Some(Outcome::Under),
+            "HomeOrDraw" => Some(Outcome::HomeOrDraw),
+            "HomeOrAway" => Some(Outcome::HomeOrAway),
+            "DrawOrAway" => Some(Outcome::DrawOrAway),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub enum MarketType {
     MatchResult,
@@ -188,6 +204,29 @@ impl MarketType {
             MarketType::Total { line } => format!("Total:{}", line),
             MarketType::Handicap { line } => format!("Handicap:{}", line),
             MarketType::AsianHandicap { line } => format!("AsianHandicap:{}", line),
+        }
+    }
+
+    pub fn from_key_string(value: &str) -> Option<Self> {
+        let (variant, line) = match value.split_once(':') {
+            Some((variant, line)) => (variant, Some(line)),
+            None => (value, None),
+        };
+
+        match variant {
+            "MatchResult" if line.is_none() => Some(MarketType::MatchResult),
+            "Moneyline" if line.is_none() => Some(MarketType::Moneyline),
+            "DoubleChance" if line.is_none() => Some(MarketType::DoubleChance),
+            "Total" => Some(MarketType::Total {
+                line: line?.parse().ok()?,
+            }),
+            "Handicap" => Some(MarketType::Handicap {
+                line: line?.parse().ok()?,
+            }),
+            "AsianHandicap" => Some(MarketType::AsianHandicap {
+                line: line?.parse().ok()?,
+            }),
+            _ => None,
         }
     }
 

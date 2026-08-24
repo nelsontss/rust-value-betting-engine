@@ -64,10 +64,7 @@ fn block_with_events(events: Vec<serde_json::Value>) -> serde_json::Value {
     json!({"events": events})
 }
 
-fn assert_game_counts(
-    games: &[crate::domain::Game],
-    event_ids: &[&str],
-) {
+fn assert_game_counts(games: &[crate::domain::Game], event_ids: &[&str]) {
     assert_eq!(games.len(), event_ids.len());
     for (game, expected_id) in games.iter().zip(event_ids) {
         assert_eq!(game.id, *expected_id);
@@ -120,11 +117,10 @@ fn parse_data_skips_event_without_dash_separator() {
 
 #[test]
 fn parse_data_match_result_market_type_1() {
-    let markets = vec![market_with_selections(1, vec![
-        selection(2.0),
-        selection(3.2),
-        selection(4.0),
-    ])];
+    let markets = vec![market_with_selections(
+        1,
+        vec![selection(2.0), selection(3.2), selection(4.0)],
+    )];
     let events = vec![betano_event("evt-1", "FC Porto", "SL Benfica", markets)];
     let data = json!({"blocks": [block_with_events(events)]});
 
@@ -133,16 +129,18 @@ fn parse_data_match_result_market_type_1() {
     assert_eq!(games[0].home_team(), "FC Porto");
     assert_eq!(games[0].away_team(), "SL Benfica");
     assert_eq!(games[0].platform(), Platform::Betano);
-    assert_eq!(match_result_count(&games[0].markets().values().cloned().collect::<Vec<_>>()), 1);
+    assert_eq!(
+        match_result_count(&games[0].markets().values().cloned().collect::<Vec<_>>()),
+        1
+    );
 }
 
 #[test]
 fn parse_data_type_9_is_double_chance() {
-    let markets = vec![market_with_selections(9, vec![
-        selection(1.5),
-        selection(2.6),
-        selection(1.8),
-    ])];
+    let markets = vec![market_with_selections(
+        9,
+        vec![selection(1.5), selection(2.6), selection(1.8)],
+    )];
     let events = vec![betano_event("evt-dc", "Benfica", "Porto", markets)];
     let data = json!({"blocks": [block_with_events(events)]});
 
@@ -156,30 +154,36 @@ fn parse_data_type_9_is_double_chance() {
 
 #[test]
 fn parse_data_type_10_is_moneyline() {
-    let markets = vec![market_with_selections(10, vec![
-        selection(1.8),
-        selection(2.1),
-    ])];
+    let markets = vec![market_with_selections(
+        10,
+        vec![selection(1.8), selection(2.1)],
+    )];
     let events = vec![betano_event("evt-2", "Benfica", "Porto", markets)];
     let data = json!({"blocks": [block_with_events(events)]});
 
     let games = BetanoParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    assert_eq!(moneyline_count(&games[0].markets().values().cloned().collect::<Vec<_>>()), 1);
+    assert_eq!(
+        moneyline_count(&games[0].markets().values().cloned().collect::<Vec<_>>()),
+        1
+    );
 }
 
 #[test]
 fn parse_data_type_13_is_total() {
-    let markets = vec![market_with_selections(13, vec![
-        selection(1.9),
-        selection(1.9),
-    ])];
+    let markets = vec![market_with_selections(
+        13,
+        vec![selection(1.9), selection(1.9)],
+    )];
     let events = vec![betano_event("evt-3", "Sporting", "Braga", markets)];
     let data = json!({"blocks": [block_with_events(events)]});
 
     let games = BetanoParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    assert_eq!(total_count(&games[0].markets().values().cloned().collect::<Vec<_>>()), 1);
+    assert_eq!(
+        total_count(&games[0].markets().values().cloned().collect::<Vec<_>>()),
+        1
+    );
 }
 
 #[test]
@@ -262,11 +266,10 @@ fn parse_data_event_without_markets_still_creates_game() {
 
 #[test]
 fn parse_data_multiple_events() {
-    let markets = vec![market_with_selections(1, vec![
-        selection(2.0),
-        selection(3.2),
-        selection(4.0),
-    ])];
+    let markets = vec![market_with_selections(
+        1,
+        vec![selection(2.0), selection(3.2), selection(4.0)],
+    )];
     let events = vec![
         betano_event("evt-a", "Team A", "Team B", markets.clone()),
         betano_event("evt-b", "Team C", "Team D", markets.clone()),
@@ -290,16 +293,22 @@ fn parse_data_type_10_requires_at_least_two_selections() {
 
 #[test]
 fn parse_data_handles_handicap_value_correctly_for_totals() {
-    let markets = vec![
-        market_with_selections(13, vec![selection(1.9), selection(1.9)]),
-    ];
+    let markets = vec![market_with_selections(
+        13,
+        vec![selection(1.9), selection(1.9)],
+    )];
     let mut market_with_line = markets[0].clone();
     if let Some(obj) = market_with_line.as_object() {
         let mut obj = obj.clone();
         obj.insert("handicap".to_string(), json!(2.5));
         market_with_line = serde_json::Value::Object(obj);
     }
-    let events = vec![betano_event("evt-h", "Team G", "Team H", vec![market_with_line])];
+    let events = vec![betano_event(
+        "evt-h",
+        "Team G",
+        "Team H",
+        vec![market_with_line],
+    )];
     let data = json!({"blocks": [block_with_events(events)]});
 
     let result = BetanoParser::parse_data(data);
@@ -308,7 +317,10 @@ fn parse_data_handles_handicap_value_correctly_for_totals() {
 
 #[test]
 fn parse_data_type_1_requires_at_least_three_selections() {
-    let markets = vec![market_with_selections(1, vec![selection(2.0), selection(3.0)])];
+    let markets = vec![market_with_selections(
+        1,
+        vec![selection(2.0), selection(3.0)],
+    )];
     let events = vec![betano_event("evt-11", "Team A", "Team B", markets)];
     let data = json!({"blocks": [block_with_events(events)]});
 
@@ -328,11 +340,10 @@ fn parse_data_type_13_requires_at_least_two_selections() {
 
 #[test]
 fn parse_data_missing_league_name_uses_empty_string() {
-    let markets = vec![market_with_selections(1, vec![
-        selection(2.0),
-        selection(3.2),
-        selection(4.0),
-    ])];
+    let markets = vec![market_with_selections(
+        1,
+        vec![selection(2.0), selection(3.2), selection(4.0)],
+    )];
     let event = json!({
         "id": "evt-no-league",
         "name": "Team A - Team B",
@@ -349,11 +360,10 @@ fn parse_data_missing_league_name_uses_empty_string() {
 
 #[test]
 fn parse_data_multiple_blocks() {
-    let markets = vec![market_with_selections(1, vec![
-        selection(2.0),
-        selection(3.2),
-        selection(4.0),
-    ])];
+    let markets = vec![market_with_selections(
+        1,
+        vec![selection(2.0), selection(3.2), selection(4.0)],
+    )];
     let events_a = vec![betano_event("evt-b1", "Team A", "Team B", markets.clone())];
     let events_b = vec![betano_event("evt-b2", "Team C", "Team D", markets)];
     let data = json!({"blocks": [block_with_events(events_a), block_with_events(events_b)]});

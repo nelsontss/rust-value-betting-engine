@@ -16,6 +16,10 @@ pub struct TotalMarket {
 }
 
 impl TotalMarket {
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
     pub fn new(id: String, line: Line, over: Odd, under: Odd) -> Self {
         Self {
             id,

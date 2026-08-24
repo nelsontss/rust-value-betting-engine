@@ -11,18 +11,29 @@ use axum_macros::debug_handler;
 use futures::Stream;
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::infrastructure::server::{
-    dto::statistics_response::StatisticsUpdatedResponse, routes::routes::AppState,
+use crate::{
+    domain::services::cluster_statistics::StatisticsUpdated,
+    infrastructure::server::{
+        dto::statistics_response::StatisticsUpdatedResponse, routes::routes::AppState,
+    },
 };
 
 #[debug_handler]
 pub async fn sse_get(
     State(app_state): State<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let mut rx = app_state
-        .cluster_service
-        .subscribe_to_cluster_statistics();
+    // subscribe before snapshotting so no completion event is missed in between
+    let mut rx = app_state.statistics_service.subscribe_to_statistics();
+    let initial = StatisticsUpdated {
+        statistics: app_state.statistics_service.get_historical_statistics(),
+    };
+    let initial_response = StatisticsUpdatedResponse::from(&initial);
+
     let stream = async_stream::stream! {
+        yield Ok(Event::default()
+            .event("StatisticsUpdated")
+            .data(serde_json::to_string(&initial_response).unwrap()));
+
         loop {
             match rx.recv().await {
                 Ok(update) => {

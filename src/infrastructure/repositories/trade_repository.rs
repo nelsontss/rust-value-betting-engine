@@ -6,13 +6,8 @@ pub struct TradeRepository {
 }
 
 impl TradeRepository {
-    pub async fn new() -> Result<Self> {
-        let db_path =
-            std::env::var("DB_PATH").map_err(|_| "DB_PATH not set in environment or .env")?;
-        let pool = SqlitePool::connect(&format!("{}?mode=rwc", db_path)).await?;
-        let repo = Self { pool };
-        repo.run_migrations().await?;
-        Ok(repo)
+    pub fn from_pool(pool: SqlitePool) -> Self {
+        Self { pool }
     }
 
     pub async fn run_migrations(&self) -> Result<()> {
@@ -97,6 +92,9 @@ impl TradeRepository {
         let rows = sqlx::query("SELECT * FROM trades WHERE status = 'Open'")
             .fetch_all(&self.pool)
             .await?;
-        Ok(rows.iter().map(|r| Trade::from_row(r)).collect::<Result<Vec<_>>>()?)
+        Ok(rows
+            .iter()
+            .map(|r| Trade::from_row(r))
+            .collect::<Result<Vec<_>>>()?)
     }
 }

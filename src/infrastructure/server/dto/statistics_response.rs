@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::domain::services::{
-    cluster_service::StatisticsUpdated, cluster_statistics::StatisticsValues,
-};
+use crate::domain::services::cluster_statistics::{StatisticsUpdated, StatisticsValues};
 
 #[derive(Serialize)]
 pub struct StatisticsUpdatedResponse {

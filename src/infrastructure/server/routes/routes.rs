@@ -4,13 +4,17 @@ use axum::{Router, http::Method, routing::get};
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::{
-    domain::{ClusterService, services::market_history_service::MarketHistoryService},
+    domain::{
+        ClusterService,
+        services::{market_service::MarketService, statistics_service::StatisticsService},
+    },
     infrastructure::server::routes::{clusters, games, market_history, platforms, statistics},
 };
 
 pub struct AppState {
     pub cluster_service: Arc<ClusterService>,
-    pub market_history_service: Arc<MarketHistoryService>,
+    pub market_service: Arc<MarketService>,
+    pub statistics_service: Arc<StatisticsService>,
 }
 
 pub fn build_router(app_state: Arc<AppState>) -> Router {

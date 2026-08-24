@@ -357,8 +357,7 @@ fn parse_data_with_total_market_multiple_lines() {
 
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let (_, _, t, _, _) =
-        count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
+    let (_, _, t, _, _) = count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(t, 2);
 }
 
@@ -383,8 +382,7 @@ fn parse_data_with_asian_handicap_multiple_lines() {
 
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
-    let (_, _, _, ah, _) =
-        count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
+    let (_, _, _, ah, _) = count_by_type(&games[0].markets().values().cloned().collect::<Vec<_>>());
     assert_eq!(ah, 2);
 }
 

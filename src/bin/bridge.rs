@@ -65,6 +65,8 @@ fn send_to_stream(stream: &mut UnixStream, msg: &str) -> bool {
 }
 
 fn main() {
+    let _ = dotenvy::dotenv();
+
     let _ = fs::remove_file(BridgeConfig::SOCKET_PATH);
     let listener = UnixListener::bind(BridgeConfig::SOCKET_PATH).expect("Cannot create socket");
     log_msg("bridge started");

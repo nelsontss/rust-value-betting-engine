@@ -6,7 +6,6 @@ use std::{
 use alloy::primitives::U256;
 use chrono::Utc;
 use futures::{SinkExt, StreamExt};
-use serde::Deserialize;
 use polymarket_client_sdk_v2::gamma::{
     Client,
     types::{
@@ -15,12 +14,9 @@ use polymarket_client_sdk_v2::gamma::{
     },
 };
 use rust_decimal::prelude::*;
+use serde::Deserialize;
 use tokio::{net::TcpStream, sync::mpsc::Sender};
-use tokio_tungstenite::{
-    connect_async,
-    tungstenite::Message,
-    MaybeTlsStream, WebSocketStream,
-};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -412,6 +408,11 @@ impl PolymarketConnector {
         ws: &mut PriceWebSocket,
         text: &str,
     ) -> Result<()> {
+        // Heartbeat reply from the server is plain text, not JSON.
+        if text.trim().eq_ignore_ascii_case("PONG") {
+            return Ok(());
+        }
+
         let envelope: WireFrameEnvelope = match serde_json::from_str(text) {
             Ok(e) => e,
             Err(e) => {
@@ -429,8 +430,7 @@ impl PolymarketConnector {
                         return Ok(());
                     }
                 };
-                Self::handle_price_update(sender, events_cache, token_to_event, price_change)
-                    .await;
+                Self::handle_price_update(sender, events_cache, token_to_event, price_change).await;
             }
             "new_market" => {
                 let new_market: WireNewMarket = match serde_json::from_str(text) {
@@ -440,9 +440,14 @@ impl PolymarketConnector {
                         return Ok(());
                     }
                 };
-                let new_tokens =
-                    Self::handle_new_market(gamma, sender, events_cache, token_to_event, new_market)
-                        .await;
+                let new_tokens = Self::handle_new_market(
+                    gamma,
+                    sender,
+                    events_cache,
+                    token_to_event,
+                    new_market,
+                )
+                .await;
                 let new_tokens: Vec<U256> = new_tokens
                     .into_iter()
                     .filter(|token| !subscribed.contains(token))
@@ -527,7 +532,10 @@ impl PolymarketConnector {
             "custom_feature_enabled": true,
         });
         ws.send(Message::text(frame.to_string())).await?;
-        debug!(count = token_ids.len(), "Subscribed to new Polymarket tokens");
+        debug!(
+            count = token_ids.len(),
+            "Subscribed to new Polymarket tokens"
+        );
         Ok(())
     }
 
@@ -541,7 +549,10 @@ impl PolymarketConnector {
             "operation": "unsubscribe",
         });
         ws.send(Message::text(frame.to_string())).await?;
-        debug!(count = token_ids.len(), "Unsubscribed from Polymarket tokens");
+        debug!(
+            count = token_ids.len(),
+            "Unsubscribed from Polymarket tokens"
+        );
         Ok(())
     }
 
@@ -835,16 +846,10 @@ fn price_at(m: &Market, index: usize) -> Option<Odd> {
 }
 
 fn market_line(m: &Market) -> f32 {
-    m.line
-        .and_then(|l| l.to_f64())
-        .unwrap_or(0.0) as f32
+    m.line.and_then(|l| l.to_f64()).unwrap_or(0.0) as f32
 }
 
-fn classify_binary_market(
-    title: &str,
-    home_team: &str,
-    away_team: &str,
-) -> &'static str {
+fn classify_binary_market(title: &str, home_team: &str, away_team: &str) -> &'static str {
     let title = title.to_lowercase();
     let home = home_team.to_lowercase();
     let away = away_team.to_lowercase();
@@ -882,10 +887,7 @@ fn match_result_market(
 
     let id = &markets.first()?.id;
     Some(domain::Market::MatchResult(MatchResultMarket::new(
-        id,
-        home?,
-        draw?,
-        away?,
+        id, home?, draw?, away?,
     )))
 }
 
@@ -961,11 +963,9 @@ fn grouped_markets_to_game_markets(
 
     for (market_type, markets) in grouped_markets {
         let game_markets: Vec<domain::Market> = match market_type.as_str() {
-            "moneyline" | "match result" => {
-                match_result_market(home_team, away_team, &markets)
-                    .into_iter()
-                    .collect()
-            }
+            "moneyline" | "match result" => match_result_market(home_team, away_team, &markets)
+                .into_iter()
+                .collect(),
             "double chance" | "double_chance" => {
                 double_chance_market(&markets).into_iter().collect()
             }

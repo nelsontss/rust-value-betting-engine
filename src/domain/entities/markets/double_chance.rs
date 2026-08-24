@@ -12,6 +12,10 @@ pub struct DoubleChanceMarket {
 }
 
 impl DoubleChanceMarket {
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
     pub fn new(id: String, home_or_draw: Odd, home_or_away: Odd, draw_or_away: Odd) -> Self {
         Self {
             id,
@@ -62,13 +66,19 @@ impl DoubleChanceMarket {
 
         match best_idx? {
             0 => Some(Arbitrage::TwoWayArbitrage(TwoWayArbitrage::new(
-                best_home_or_draw, best_home_or_away, sums[0],
+                best_home_or_draw,
+                best_home_or_away,
+                sums[0],
             ))),
             1 => Some(Arbitrage::TwoWayArbitrage(TwoWayArbitrage::new(
-                best_home_or_draw, best_draw_or_away, sums[1],
+                best_home_or_draw,
+                best_draw_or_away,
+                sums[1],
             ))),
             _ => Some(Arbitrage::TwoWayArbitrage(TwoWayArbitrage::new(
-                best_home_or_away, best_draw_or_away, sums[2],
+                best_home_or_away,
+                best_draw_or_away,
+                sums[2],
             ))),
         }
     }
