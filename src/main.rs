@@ -67,8 +67,12 @@ async fn main() {
         market_service,
         statistics_service,
     });
+    let shutdown = async {
+        tokio::signal::ctrl_c().await.expect("failed to listen for ctrl+c");
+    };
     let server = tokio::spawn(rust_value_betting_engine::infrastructure::server::serve(
-        app_state,
+        app_state.clone(),
+        shutdown,
     ));
 
     tokio::select! {
@@ -78,6 +82,7 @@ async fn main() {
 
     engine.abort();
     server.abort();
+    app_state.cluster_service.flush_pending_persists().await;
     tracing::info!("shutdown complete");
     std::process::exit(0);
 }

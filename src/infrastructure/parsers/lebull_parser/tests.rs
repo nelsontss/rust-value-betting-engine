@@ -237,7 +237,7 @@ fn parse_data_parses_2way_market_type_274556() {
 }
 
 #[test]
-fn parse_data_skips_live_events() {
+fn parse_data_live_events_are_included() {
     let live_events = vec![lebull_event(
         200,
         "Team A",
@@ -251,7 +251,8 @@ fn parse_data_skips_live_events() {
     let data = json!([league("Portugal", "Liga", live_events)]);
 
     let games = LeBullParser::parse_data(data);
-    assert!(games.is_empty());
+    assert_eq!(games.len(), 1);
+    assert_eq!(games[0].home_team(), "Team A");
 }
 
 #[test]

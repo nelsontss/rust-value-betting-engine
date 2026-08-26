@@ -209,7 +209,7 @@ fn parse_data_empty_option_markets_creates_game_with_no_markets() {
 #[test]
 fn parse_data_filters_non_visible_option_markets() {
     let mut om = regular_3way(2.0, 3.2, 4.0);
-    om["status"] = json!("Suspended");
+    om["status"] = json!("Closed");
     let data = json!({"fixtures": [fixture("f1", vec![om])]});
     let games = BwinParser::parse_data(data);
     assert_eq!(games.len(), 1);
@@ -260,6 +260,18 @@ fn parse_ws_event_connection_ack() {
 
 #[test]
 fn parse_ws_event_option_market_update() {
+    let data = r#"{"type":1,"target":"Receive","invocationId":"0","arguments":[{"messageType":"OptionMarketUpdate","topic":"v2|pt|2:7846523_67_any|fxm-202940865","payload":{"optionMarket":{"id":1,"status":"Visible","parameters":[{"key":"Period","value":"RegularTime"},{"key":"MarketType","value":"3way"}],"options":[{"price":{"odds":2.0}},{"price":{"odds":3.2}},{"price":{"odds":4.0}}]}}}]}"#;
+    let event = BwinParser::parse_ws_event(data).unwrap();
+    match event {
+        BwinWSEvent::OptionMarketUpdate { fixture_id, .. } => {
+            assert_eq!(fixture_id, "2:7846523");
+        }
+        _ => panic!("expected OptionMarketUpdate"),
+    }
+}
+
+#[test]
+fn parse_ws_event_option_market_update_fallback_fixture_id() {
     let data = r#"{"type":1,"target":"Receive","invocationId":"0","arguments":[{"messageType":"OptionMarketUpdate","fixtureId":"f1","payload":{"optionMarket":{"id":1,"status":"Visible","parameters":[{"key":"Period","value":"RegularTime"},{"key":"MarketType","value":"3way"}],"options":[{"price":{"odds":2.0}},{"price":{"odds":3.2}},{"price":{"odds":4.0}}]}}}]}"#;
     let event = BwinParser::parse_ws_event(data).unwrap();
     match event {
@@ -288,11 +300,11 @@ fn parse_ws_event_option_market_delete() {
 
 #[test]
 fn parse_ws_event_fixture_update() {
-    let data = r#"{"type":1,"target":"Receive","invocationId":"0","arguments":[{"messageType":"FixtureUpdate","fixtureId":"f1","payload":{"stage":"InPlay"}}]}"#;
+    let data = r#"{"type":1,"target":"Receive","invocationId":"0","arguments":[{"messageType":"FixtureUpdate","payload":{"fixtureId":"2:7850275","stage":"InPlay"}}]}"#;
     let event = BwinParser::parse_ws_event(data).unwrap();
     match event {
         BwinWSEvent::FixtureUpdate { fixture_id, stage } => {
-            assert_eq!(fixture_id, "f1");
+            assert_eq!(fixture_id, "2:7850275");
             assert_eq!(stage, "InPlay");
         }
         _ => panic!("expected FixtureUpdate"),
@@ -313,13 +325,15 @@ fn parse_ws_event_scoreboard_slim() {
 
 #[test]
 fn parse_ws_event_main_to_live_update() {
-    let data = r#"{"type":1,"target":"Receive","invocationId":"0","arguments":[{"messageType":"MainToLiveUpdate","payload":[{"preMatchId":"pm1","inPlayId":"ip1"}]}]}"#;
+    let data = r#"{"type":1,"target":"Receive","invocationId":"0","arguments":[{"messageType":"MainToLiveUpdate","payload":{"switchedFixtures":[{"preMatchId":"19902759","inPlayId":"19902764"},{"preMatchId":"19903686","inPlayId":"19903688"}]}}]}"#;
     let event = BwinParser::parse_ws_event(data).unwrap();
     match event {
         BwinWSEvent::MainToLiveUpdate { switched_fixtures } => {
-            assert_eq!(switched_fixtures.len(), 1);
-            assert_eq!(switched_fixtures[0].pre_match_id, "pm1");
-            assert_eq!(switched_fixtures[0].in_play_id, "ip1");
+            assert_eq!(switched_fixtures.len(), 2);
+            assert_eq!(switched_fixtures[0].pre_match_id, "19902759");
+            assert_eq!(switched_fixtures[0].in_play_id, "19902764");
+            assert_eq!(switched_fixtures[1].pre_match_id, "19903686");
+            assert_eq!(switched_fixtures[1].in_play_id, "19903688");
         }
         _ => panic!("expected MainToLiveUpdate"),
     }
@@ -377,10 +391,20 @@ fn parse_option_market_update_missing_option_market_returns_empty() {
 #[test]
 fn parse_option_market_update_non_visible_returns_empty() {
     let mut om = regular_3way(2.0, 3.2, 4.0);
-    om["status"] = json!("Suspended");
+    om["status"] = json!("Closed");
     let data = json!({"optionMarket": om});
     let markets = BwinParser::parse_option_market_update(data);
     assert_eq!(markets.len(), 0);
+}
+
+#[test]
+fn parse_option_market_update_suspended_returns_market() {
+    let mut om = regular_3way(2.0, 3.2, 4.0);
+    om["status"] = json!("Suspended");
+    let data = json!({"optionMarket": om});
+    let markets = BwinParser::parse_option_market_update(data);
+    assert_eq!(markets.len(), 1);
+    assert!(matches!(markets[0], Market::MatchResult(_)));
 }
 
 // --- from_frame tests ---

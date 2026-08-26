@@ -54,14 +54,6 @@ impl LeBullParser {
                     None => continue,
                 };
 
-                if event
-                    .get("isLive")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
-                {
-                    continue;
-                }
-
                 let date = parse_date(event);
 
                 let stake_types = match event.get("stakeTypes").and_then(|m| m.as_array()) {

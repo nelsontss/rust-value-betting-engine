@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use sqlx::sqlite::SqliteRow;
+use sqlx::sqlite::{SqliteConnection, SqliteRow};
 use sqlx::{Row, SqlitePool};
 
 use crate::{
@@ -20,14 +20,6 @@ pub struct GameRepository {
 impl GameRepository {
     pub fn from_pool(pool: SqlitePool) -> Self {
         Self { pool }
-    }
-
-    pub async fn game_exists(&self, game_id: &str) -> Result<bool> {
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM games WHERE id = ?")
-            .bind(game_id)
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(count > 0)
     }
 
     pub async fn run_migrations(&self) -> Result<()> {
@@ -108,6 +100,61 @@ impl GameRepository {
         Ok(())
     }
 
+    /// Atomically inserts or updates a game row.
+    ///
+    /// Unlike a `game_exists` + insert/update pair, this cannot fail with
+    /// `UNIQUE constraint failed: games.id` when two concurrent writers
+    /// (e.g. overlapping `insert_cluster` tasks) persist the same game.
+    pub async fn upsert_game(&self, game: &Game) -> Result<()> {
+        let mut conn = self.pool.acquire().await?;
+        Self::upsert_game_row(game, &mut *conn).await?;
+        self.insert_markets(game).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn upsert_game_own_tx(
+        pool: &sqlx::SqlitePool,
+        game: &Game,
+    ) -> Result<()> {
+        let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+        Self::upsert_game_row(game, &mut *tx).await?;
+        Self::insert_markets_inner(game, &mut *tx).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn upsert_game_row(
+        game: &Game,
+        conn: &mut SqliteConnection,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO games (id, home_team, away_team, country, competition, platform, date, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                 home_team = excluded.home_team,
+                 away_team = excluded.away_team,
+                 country = excluded.country,
+                 competition = excluded.competition,
+                 platform = excluded.platform,
+                 date = excluded.date,
+                 updated_at = excluded.updated_at",
+        )
+        .bind(&game.id)
+        .bind(game.home_team())
+        .bind(game.away_team())
+        .bind(game.country())
+        .bind(game.competition())
+        .bind(platform_to_string(game.platform()))
+        .bind(game.date.and_utc().timestamp())
+        .bind(now)
+        .bind(now)
+        .execute(conn)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn get_game(&self, game_id: &str) -> Result<Option<Game>> {
         let row = sqlx::query("SELECT * FROM games WHERE id = ?")
             .bind(game_id)
@@ -161,13 +208,19 @@ impl GameRepository {
     }
 
     async fn insert_markets(&self, game: &Game) -> Result<()> {
-        let now = Utc::now().timestamp();
-        let mut tx = self
-            .pool
-            .begin_with("BEGIN IMMEDIATE")
-            .await?;
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        Self::insert_markets_inner(game, &mut *tx).await?;
+        tx.commit().await?;
+        Ok(())
+    }
 
-        let last_markets = last_market_columns(&mut *tx, &game.id).await?;
+    async fn insert_markets_inner(
+        game: &Game,
+        conn: &mut SqliteConnection,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+
+        let last_markets = last_market_columns(&mut *conn, &game.id).await?;
 
         for market in game.markets().values() {
             let cols = market_columns(market);
@@ -184,7 +237,7 @@ impl GameRepository {
             .bind(&cols.id)
             .bind(&cols.market_type)
             .bind(cols.line)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await?;
 
             sqlx::query(
@@ -206,7 +259,7 @@ impl GameRepository {
             .bind(cols.draw_or_away)
             .bind(now)
             .bind(now)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await?;
         }
 
@@ -222,12 +275,10 @@ impl GameRepository {
                 .bind(&key.0)
                 .bind(&key.1)
                 .bind(key.2)
-                .execute(&mut *tx)
+                .execute(&mut *conn)
                 .await?;
             }
         }
-
-        tx.commit().await?;
 
         Ok(())
     }

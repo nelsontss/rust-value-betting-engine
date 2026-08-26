@@ -84,14 +84,6 @@ impl FixtureClusterRepository {
     }
 
     pub async fn insert_cluster(&self, cluster: &FixtureCluster) -> Result<()> {
-        for game in cluster.games() {
-            if self.game_repository.game_exists(&game.id).await? {
-                self.game_repository.update_game(game).await?;
-            } else {
-                self.game_repository.insert_game(game).await?;
-            }
-        }
-
         let now = Utc::now().timestamp();
         let game_date = cluster
             .representative_game()
@@ -99,13 +91,16 @@ impl FixtureClusterRepository {
             .map(|g| g.date.and_utc().timestamp())
             .ok_or_else(|| "cluster has no games".to_string())?;
 
-        // Atomic rebuild: concurrent persists of the same key serialize on the
-        // write lock, so one task can never insert rows the other just deleted.
-        //
-        // BEGIN IMMEDIATE takes the write lock up front: with concurrent writers
-        // (other clusters, draw-trade bot), a deferred transaction that reads
-        // before writing would fail with SQLITE_BUSY_SNAPSHOT, which
-        // busy_timeout does not retry.
+        // Single transaction for game upserts + cluster bookkeeping.
+        // Upsert each game in its own short transaction so we don't hold the
+        // write lock for the entire cluster. The cluster bookkeeping below
+        // needs its own small transaction for atomicity.
+        for game in cluster.games() {
+            GameRepository::upsert_game_own_tx(&self.pool, game).await?;
+        }
+
+        // BEGIN IMMEDIATE takes the write lock up front for the cluster row
+        // and fixture_cluster_game bookkeeping.
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
 
         sqlx::query(

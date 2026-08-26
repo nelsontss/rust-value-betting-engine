@@ -4,7 +4,8 @@ use std::{
 };
 
 use alloy::primitives::U256;
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
+use deunicode::deunicode;
 use futures::{SinkExt, StreamExt};
 use polymarket_client_sdk_v2::gamma::{
     Client,
@@ -36,6 +37,16 @@ use crate::{
 
 pub struct PolymarketConnector {
     gamma_client: Client,
+}
+
+const SOCCER_MATCH_DURATION_MINS: i64 = 120;
+
+fn is_event_expired(event: &GammaEvent) -> bool {
+    let Some(start_time) = event.event.start_time else {
+        return false;
+    };
+    let end = start_time + chrono::Duration::minutes(SOCCER_MATCH_DURATION_MINS);
+    Utc::now() > end
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -71,6 +82,10 @@ struct WirePriceEntry {
     #[serde(rename = "asset_id")]
     asset_id: U256,
     price: Decimal,
+    #[serde(rename = "best_bid")]
+    best_bid: Decimal,
+    #[serde(rename = "best_ask")]
+    best_ask: Decimal,
 }
 
 #[derive(Debug, Deserialize)]
@@ -281,6 +296,7 @@ impl PolymarketConnector {
     }
 
     pub async fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
+        eprintln!("polymarket start");
         let ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market";
         let poll_interval = Duration::from_secs(3600);
         let retry_delay = Duration::from_secs(10);
@@ -558,7 +574,12 @@ impl PolymarketConnector {
 
     async fn fetch_market_by_id(gamma: &Client, id: &str) -> Result<Market> {
         let host = gamma.host();
-        let response = reqwest::get(format!("{host}markets/{id}")).await?;
+        let response = reqwest::Client::builder()
+            .user_agent("Mozilla/5.0")
+            .build()?
+            .get(format!("{host}markets/{id}"))
+            .send()
+            .await?;
         if !response.status().is_success() {
             warn!(status = %response.status(), market_id = id, "Failed to fetch market by id");
         }
@@ -567,7 +588,12 @@ impl PolymarketConnector {
 
     async fn fetch_event_by_id(gamma: &Client, id: &str) -> Result<GammaEvent> {
         let host = gamma.host();
-        let response = reqwest::get(format!("{host}events/{id}")).await?;
+        let response = reqwest::Client::builder()
+            .user_agent("Mozilla/5.0")
+            .build()?
+            .get(format!("{host}events/{id}"))
+            .send()
+            .await?;
         if !response.status().is_success() {
             warn!(status = %response.status(), event_id = id, "Failed to fetch event by id");
         }
@@ -588,29 +614,40 @@ impl PolymarketConnector {
             }
         };
 
-        let mut games = Vec::new();
+        let mut games_by_id: HashMap<String, Game> = HashMap::new();
         let mut new_token_map: HashMap<U256, String> = HashMap::new();
 
         for event in &events {
+            if is_event_expired(event) {
+                continue;
+            }
             if let Some(game) = event_to_game(event) {
+                if let Some(existing) = games_by_id.get_mut(&game.id) {
+                    let new_markets: Vec<_> = game.markets().values().cloned().collect();
+                    existing.update_markets(new_markets);
+                } else {
+                    games_by_id.insert(game.id.clone(), game);
+                }
+
                 if let Some(markets) = &event.event.markets {
                     for market in markets {
                         if let Some(token_ids) = &market.clob_token_ids {
-                            if let Some(&yes_token) = token_ids.first() {
-                                new_token_map.insert(yes_token, game.id.clone());
+                            for &token in token_ids {
+                                new_token_map.insert(token, event.event.id.clone());
                             }
                         }
                     }
                 }
-                games.push(game);
             }
         }
-
+        let active_ids: HashSet<&str> = events.iter().map(|e| e.event.id.as_str()).collect();
+        events_cache.retain(|id, _| active_ids.contains(id.as_str()));
         for event in events {
             events_cache.insert(event.event.id.clone(), event);
         }
         *token_map = new_token_map;
 
+        let games: Vec<Game> = games_by_id.into_values().collect();
         if !games.is_empty() {
             let _ = sender.send(BookmakerEvent::InsertGames(games)).await;
         }
@@ -618,16 +655,19 @@ impl PolymarketConnector {
 
     async fn fetch_events(gamma: &Client) -> Result<Vec<GammaEvent>> {
         let host = gamma.host();
-        let end_date_min = Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
+        let end_date_min = (Utc::now() - Duration::from_mins(200)).format("%Y-%m-%dT%H:%M:%SZ");
         let end_date_max = (Utc::now() + Duration::from_hours(48)).format("%Y-%m-%dT%H:%M:%SZ");
 
         let mut events = Vec::new();
         let mut offset = 0;
+        let client = reqwest::Client::builder()
+            .user_agent("Mozilla/5.0")
+            .build()?;
         loop {
             let url = format!(
                 "{host}events?tag_slug=soccer&closed=false&ascending=true&limit=100&offset={offset}&end_date_min={end_date_min}&end_date_max={end_date_max}"
             );
-            let response = reqwest::get(&url).await?;
+            let response = client.get(&url).send().await?;
             if !response.status().is_success() {
                 warn!(
                     status = %response.status(),
@@ -670,6 +710,11 @@ impl PolymarketConnector {
                 continue;
             };
 
+            if event.event.closed == Some(true) || is_event_expired(&event) {
+                continue;
+            }
+
+            let display_price = derive_display_price(&entry);
             let mut updated = false;
             if let Some(ref mut markets) = event.event.markets {
                 for market in markets.iter_mut() {
@@ -677,7 +722,7 @@ impl PolymarketConnector {
                         if let Some(pos) = token_ids.iter().position(|&t| t == token_id) {
                             if let Some(ref mut prices) = market.outcome_prices {
                                 if pos < prices.len() {
-                                    prices[pos] = entry.price;
+                                    prices[pos] = display_price;
                                     updated = true;
                                 }
                             }
@@ -691,6 +736,27 @@ impl PolymarketConnector {
                 if let Some(game) = event_to_game(&event) {
                     let game_id = game.id.clone();
                     let markets: Vec<_> = game.markets().values().cloned().collect();
+
+                    if game_id == "pm-smouha_sc_vs_asyut_petroleum_sc_20260826" {
+                        if let Some(domain::Market::MatchResult(mr)) = game
+                            .markets()
+                            .get(&domain::entities::MarketType::MatchResult)
+                        {
+                            info!(
+                                game_id = %game_id,
+                                asset_id = %entry.asset_id,
+                                raw_price = %entry.price,
+                                best_bid = %entry.best_bid,
+                                best_ask = %entry.best_ask,
+                                display_price = %display_price,
+                                home = mr.home.get(),
+                                draw = mr.draw.get(),
+                                away = mr.away.get(),
+                                "MatchResult price change"
+                            );
+                        }
+                    }
+
                     let _ = sender
                         .send(BookmakerEvent::UpdateMarkets((game_id, markets)))
                         .await;
@@ -748,6 +814,24 @@ fn group_markets_by_type(markets: &[Market]) -> HashMap<String, Vec<&Market>> {
     })
 }
 
+fn polymarket_game_id(home_team: &str, away_team: &str, date: NaiveDateTime) -> String {
+    let normalize = |s: &str| -> String {
+        deunicode(&s.to_lowercase())
+            .chars()
+            .filter(|c| c.is_alphanumeric() || *c == ' ')
+            .collect::<String>()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join("_")
+    };
+    format!(
+        "pm-{}_vs_{}_{}",
+        normalize(home_team),
+        normalize(away_team),
+        date.format("%Y%m%d")
+    )
+}
+
 fn event_to_game(event: &GammaEvent) -> Option<Game> {
     let (home_team, away_team) = parse_teams(event)?;
 
@@ -787,7 +871,7 @@ fn event_to_game(event: &GammaEvent) -> Option<Game> {
     }
 
     Some(Game::new_with_id(
-        &event.event.id,
+        &polymarket_game_id(&home_team, &away_team, game_start),
         &home_team,
         &away_team,
         &country,
@@ -831,6 +915,17 @@ fn parse_teams(event: &GammaEvent) -> Option<(String, String)> {
     }
 
     Some((home.to_string(), away.to_string()))
+}
+
+fn derive_display_price(entry: &WirePriceEntry) -> Decimal {
+    let spread = entry.best_ask - entry.best_bid;
+    let threshold = Decimal::try_from("0.10").unwrap_or_default();
+    let two = Decimal::try_from("2").unwrap_or(Decimal::ONE);
+    if spread <= threshold && !spread.is_sign_negative() {
+        (entry.best_bid + entry.best_ask) / two
+    } else {
+        entry.price
+    }
 }
 
 fn prob_to_odd(prob: f64) -> Option<Odd> {

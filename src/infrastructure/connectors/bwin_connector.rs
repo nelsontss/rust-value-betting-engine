@@ -1,4 +1,5 @@
 use std::net::TcpStream;
+use std::time::Duration;
 
 use tokio::sync::mpsc::Sender;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -29,31 +30,191 @@ impl BwinConnector {
     }
 
     fn run_blocking(sender: Sender<BookmakerEvent>, registry: ParserRegistry) {
-        match BwinConnector::client()
-            .get(BwinConnector::FIXTURES_URL)
-            .send()
-        {
-            Ok(response) => {
-                if let Ok(json) = response.json::<serde_json::Value>() {
-                    match registry.parse(&Platform::Bwin, json) {
-                        Some(games) => {
-                            BwinConnector::subscribe_to_game_updates(games, sender);
-                        }
-                        None => {
-                            eprintln!("no parser registered for platform Bwin");
-                        }
-                    }
-                } else {
-                    eprintln!("Error reading body json");
+        let mut backoff = Duration::from_secs(5);
+        let max_backoff = Duration::from_secs(60);
+
+        loop {
+            match Self::fetch_and_subscribe(&registry, &sender) {
+                Ok(()) => {
+                    eprintln!("Bwin WS disconnected, reconnecting...");
+                    backoff = Duration::from_secs(5);
+                }
+                Err(e) => {
+                    eprintln!("Bwin connector error: {:?}, retrying in {:?}", e, backoff);
                 }
             }
-            Err(e) => {
-                eprintln!("Error making polling request to bwin: {:?}", e);
+
+            std::thread::sleep(backoff);
+            backoff = (backoff * 2).min(max_backoff);
+        }
+    }
+
+    fn fetch_and_subscribe(
+        registry: &ParserRegistry,
+        sender: &Sender<BookmakerEvent>,
+    ) -> Result<()> {
+        let mut all_games = Vec::new();
+
+        for url in [
+            BwinConnector::FIXTURES_URL,
+            BwinConnector::LIVE_FIXTURES_URL,
+        ] {
+            let response = BwinConnector::client()
+                .get(url)
+                .send()
+                .map_err(|e| format!("Error fetching fixtures: {e}"))?;
+
+            let json: serde_json::Value = response
+                .json()
+                .map_err(|e| format!("Error reading fixtures JSON: {e}"))?;
+
+            if let Some(games) = registry.parse(&Platform::Bwin, json) {
+                all_games.extend(games);
             }
+        }
+
+        if all_games.is_empty() {
+            return Err("No games found".into());
+        }
+
+        let _ = sender.blocking_send(BookmakerEvent::InsertGames(all_games.clone()));
+        Self::run_ws_session(all_games, sender)
+    }
+
+    fn run_ws_session(games: Vec<Game>, sender: &Sender<BookmakerEvent>) -> Result<()> {
+        let topics = Self::get_subscription_topics(&games);
+
+        let url = BwinConnector::WEBSOCKET_URL;
+        let mut request = url.into_client_request().unwrap();
+        request
+            .headers_mut()
+            .insert("Origin", HeaderValue::from_static("https://www.bwin.pt"));
+        request.headers_mut().insert(
+            "User-Agent",
+            HeaderValue::from_static(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+            ),
+        );
+
+        let (mut ws, _) = connect(request).map_err(|e| format!("WS connect error: {e}"))?;
+
+        ws.send(Message::Text(
+            "{\"protocol\":\"json\",\"version\":1}\x1e".into(),
+        ))
+        .map_err(|e| format!("WS handshake error: {e}"))?;
+
+        let frame = BwinWSEvent::subscribe(topics.clone());
+        let subscribe_msg = serde_json::to_string(&frame).unwrap() + "\x1e";
+        let mut subscribed = false;
+
+        while let Ok(message) = ws.read() {
+            match message {
+                Message::Text(text) => {
+                    for part in text.split('\x1e') {
+                        let part = part.trim();
+                        if part.is_empty() {
+                            continue;
+                        }
+                        if part == "{}" && !subscribed {
+                            ws.send(Message::Text(subscribe_msg.clone().into())).ok();
+                            subscribed = true;
+                            continue;
+                        }
+                        if let Some(event) = BwinParser::parse_ws_event(part) {
+                            Self::handle_bwin_event(event, &mut ws, &sender);
+                        } else {
+                            eprintln!("[bwin] unparsable frame: {}", &part[..part.len().min(200)]);
+                        }
+                    }
+                }
+                Message::Close(_) => {
+                    eprintln!("Bwin socket closed");
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_subscription_topics(games: &[Game]) -> Vec<String> {
+        games
+            .iter()
+            .flat_map(|g| {
+                let base = format!("v2|pt|{}_67_any", g.id);
+                let mut topics = vec![format!("{}|fxt", base), format!("{}|sbs", base)];
+                for (_, market) in g.markets() {
+                    let market_id = Self::market_bwin_id(market);
+                    topics.push(format!("{}|fxm-{}", base, market_id));
+                }
+                topics
+            })
+            .collect()
+    }
+
+    fn market_bwin_id(market: &crate::domain::entities::Market) -> String {
+        match market {
+            crate::domain::entities::Market::MatchResult(m) => m.id.clone(),
+            crate::domain::entities::Market::Moneyline(m) => m.id(),
+            crate::domain::entities::Market::DoubleChance(m) => m.id(),
+            crate::domain::entities::Market::Total(m) => m.id(),
+            crate::domain::entities::Market::Handicap(m) => m.id(),
+            crate::domain::entities::Market::AsianHandicap(m) => m.id(),
+        }
+    }
+
+    fn handle_bwin_event(
+        event: BwinWSEvent,
+        ws: &mut WebSocket<MaybeTlsStream<TcpStream>>,
+        sender: &Sender<BookmakerEvent>,
+    ) {
+        match event {
+            BwinWSEvent::Ping => {
+                ws.send(Message::Text("{\"type\":6}\x1e".into())).ok();
+            }
+            BwinWSEvent::OptionMarketUpdate {
+                fixture_id,
+                payload,
+                ..
+            } => {
+                let markets = BwinParser::parse_option_market_update(payload.clone());
+
+                if !markets.is_empty() {
+                    let _ =
+                        sender.blocking_send(BookmakerEvent::UpdateMarkets((fixture_id, markets)));
+                }
+            }
+            BwinWSEvent::MainToLiveUpdate { switched_fixtures } => {
+                for sf in &switched_fixtures {
+                    println!(
+                        "bwin fixture switched prematch {} -> live {}",
+                        sf.pre_match_id, sf.in_play_id
+                    );
+                }
+            }
+            BwinWSEvent::FixtureUpdate { fixture_id, stage } => {
+                println!("bwin fixture {} stage: {}", fixture_id, stage);
+            }
+            BwinWSEvent::OptionMarketDelete {
+                market_id,
+                fixture_id,
+            } => {
+                println!(
+                    "bwin market deleted: fixture {} market {}",
+                    fixture_id, market_id
+                );
+            }
+            BwinWSEvent::ScoreboardSlim { .. } => {}
+            BwinWSEvent::ConnectionAck { connection_id } => {
+                println!("bwin connected: {}", connection_id);
+            }
+            BwinWSEvent::Subscribe { .. } => {}
         }
     }
 
     const FIXTURES_URL: &str = "https://www.bwin.pt/cds-api/bettingoffer/fixtures?x-bwin-accessid=YmQwNTFkNDAtNzM3Yi00YWIyLThkNDYtYWFmNGY2N2Y1OWIx&lang=en&country=PT&userCountry=PT&fixtureTypes=Standard&state=Latest&offerMapping=Filtered&offerCategories=Gridable&fixtureCategories=Gridable,NonGridable,Other&sportIds=4&isPriceBoost=false&statisticsModes=None&skip=0&take=50&sortBy=Tags";
+    const LIVE_FIXTURES_URL: &str = "https://www.bwin.pt/cds-api/bettingoffer/fixtures?x-bwin-accessid=YmQwNTFkNDAtNzM3Yi00YWIyLThkNDYtYWFmNGY2N2Y1OWIx&lang=en&country=PT&userCountry=PT&fixtureTypes=Standard&state=Live&offerMapping=Filtered&offerCategories=Gridable&fixtureCategories=Gridable,NonGridable,Other&sportIds=4&isPriceBoost=false&statisticsModes=None&skip=0&take=50&sortBy=Tags";
     const WEBSOCKET_URL: &str = "wss://cds-push.bwin.pt/ws-1-0?lang=pt&country=PT&x-bwin-accessId=YmQwNTFkNDAtNzM3Yi00YWIyLThkNDYtYWFmNGY2N2Y1OWIx&appUpdates=false";
 
     pub fn client() -> reqwest::blocking::Client {
@@ -95,108 +256,6 @@ impl BwinConnector {
             "application/json, text/plain, */*".parse().unwrap(),
         );
         headers
-    }
-
-    fn subscribe_to_game_updates(games: Vec<Game>, sender: Sender<BookmakerEvent>) {
-        let topics = BwinConnector::get_subcription_topics(&games);
-        let _ = sender.blocking_send(BookmakerEvent::InsertGames(games));
-
-        let url = BwinConnector::WEBSOCKET_URL;
-        let mut request = url.into_client_request().unwrap();
-        request
-            .headers_mut()
-            .insert("Origin", HeaderValue::from_static("https://www.bwin.pt"));
-        request.headers_mut().insert(
-            "User-Agent",
-            HeaderValue::from_static(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
-            ),
-        );
-        match connect(request) {
-            Ok((mut ws, _)) => {
-                ws.send(Message::Text(
-                    "{\"protocol\":\"json\",\"version\":1}\x1e".into(),
-                ))
-                .unwrap();
-
-                let frame = BwinWSEvent::subscribe(topics);
-                let subscribe_msg = serde_json::to_string(&frame).unwrap() + "\x1e";
-                let mut subscribed = false;
-
-                while let Ok(message) = ws.read() {
-                    match message {
-                        Message::Text(text) => {
-                            for part in text.split('\x1e') {
-                                let part = part.trim();
-                                if part.is_empty() {
-                                    continue;
-                                }
-                                if part == "{}" && !subscribed {
-                                    ws.send(Message::Text(subscribe_msg.clone().into()))
-                                        .unwrap();
-                                    subscribed = true;
-                                    continue;
-                                }
-                                if let Some(event) = BwinParser::parse_ws_event(part) {
-                                    BwinConnector::handle_bwin_event(event, &mut ws, &sender);
-                                }
-                            }
-                        }
-                        Message::Close(_) => {
-                            eprintln!("Bwin socket closed");
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("Error connecting to websocket: {:?}", e);
-            }
-        }
-    }
-
-    fn get_subcription_topics(games: &[Game]) -> Vec<String> {
-        games
-            .iter()
-            .map(|g| format!("v2|pt|{}_67_any|grd", g.id))
-            .collect()
-    }
-
-    fn handle_bwin_event(
-        event: BwinWSEvent,
-        ws: &mut WebSocket<MaybeTlsStream<TcpStream>>,
-        sender: &Sender<BookmakerEvent>,
-    ) {
-        match event {
-            BwinWSEvent::Ping => {
-                ws.send(Message::Text("{\"type\":6}\x1e".into())).ok();
-            }
-            BwinWSEvent::OptionMarketUpdate {
-                fixture_id,
-                payload,
-                ..
-            } => {
-                let markets = BwinParser::parse_option_market_update(payload);
-                let _ = sender.blocking_send(BookmakerEvent::UpdateMarkets((fixture_id, markets)));
-            }
-            BwinWSEvent::MainToLiveUpdate { switched_fixtures } => {
-                println!("switched: {:?}", switched_fixtures);
-            }
-            BwinWSEvent::OptionMarketDelete {
-                market_id: _,
-                fixture_id: _,
-            } => {
-                eprintln!("Unhandled deleted market - TODO");
-            }
-            BwinWSEvent::ScoreboardSlim {
-                scoreboard: _,
-                fixture_id: _,
-            } => {}
-            _ => {
-                eprintln!("Unhandled bwin event: {:?}", event)
-            }
-        }
     }
 
     pub fn new() -> Self {

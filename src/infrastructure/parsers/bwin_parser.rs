@@ -74,7 +74,9 @@ impl BwinWSEvent {
                         Some(Self::ConnectionAck { connection_id })
                     }
                     "MainToLiveUpdate" => {
-                        let switched = serde_json::from_value(payload.clone()).ok()?;
+                        let switched = payload
+                            .get("switchedFixtures")
+                            .and_then(|v| serde_json::from_value(v.clone()).ok())?;
                         Some(Self::MainToLiveUpdate {
                             switched_fixtures: switched,
                         })
@@ -83,8 +85,13 @@ impl BwinWSEvent {
                         let fixture_id = data
                             .get("fixtureId")
                             .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                            .map(|s| s.to_string())
+                            .or_else(|| {
+                                data.get("topic").and_then(|t| t.as_str()).and_then(|topic| {
+                                    topic.split('|').nth(2)?.split('_').next().map(|s| s.to_string())
+                                })
+                            })
+                            .unwrap_or_default();
                         Some(Self::OptionMarketUpdate {
                             payload: payload.clone(),
                             fixture_id,
@@ -106,9 +113,10 @@ impl BwinWSEvent {
                         })
                     }
                     "FixtureUpdate" => {
-                        let fixture_id = data
+                        let fixture_id = payload
                             .get("fixtureId")
                             .and_then(|v| v.as_str())
+                            .or_else(|| data.get("fixtureId").and_then(|v| v.as_str()))
                             .unwrap_or("")
                             .to_string();
                         let stage = payload
@@ -171,7 +179,7 @@ impl BwinParser {
 
     fn parse_single_market(om: &Value) -> Option<Market> {
         let status = om.get("status").and_then(|s| s.as_str()).unwrap_or("");
-        if status != "Visible" {
+        if status != "Visible" && status != "Suspended" {
             return None;
         }
 
@@ -355,6 +363,10 @@ impl BwinParser {
         games
     }
 
+    pub fn get_param_value(om: &Value, key: &str) -> Option<String> {
+        Self::get_param(om, key)
+    }
+
     fn get_param(om: &Value, key: &str) -> Option<String> {
         om.get("parameters")
             .and_then(|params| params.as_array())
@@ -366,7 +378,7 @@ impl BwinParser {
             })
     }
 
-    fn odds(option: &Value) -> Option<f64> {
+    pub fn odds(option: &Value) -> Option<f64> {
         option
             .get("price")
             .and_then(|p| p.get("odds"))

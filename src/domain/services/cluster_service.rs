@@ -32,6 +32,7 @@ pub struct ClusterService {
     market_service: Option<Arc<MarketService>>,
     fixture_cluster_repository: Option<Arc<FixtureClusterRepository>>,
     statistics_service: Option<Arc<StatisticsService>>,
+    pending_persists: DashMap<String, Arc<FixtureCluster>>,
 }
 
 impl ClusterService {
@@ -47,6 +48,21 @@ impl ClusterService {
             market_service: None,
             fixture_cluster_repository: None,
             statistics_service: None,
+            pending_persists: DashMap::new(),
+        }
+    }
+
+    pub async fn flush_pending_persists(&self) {
+        if let Some(repo) = &self.fixture_cluster_repository {
+            for entry in self.pending_persists.iter() {
+                let key = entry.key();
+                let cluster = entry.value().clone();
+                tracing::info!(cluster = key, "flushing pending persist on shutdown");
+                if let Err(e) = repo.insert_cluster(&cluster).await {
+                    tracing::error!("Error flushing persist {}: {}", key, e);
+                }
+            }
+            self.pending_persists.clear();
         }
     }
 
@@ -81,12 +97,20 @@ impl ClusterService {
                 return;
             }
 
+            if self.pending_persists.contains_key(&cluster.key()) {
+                return;
+            }
+
+            self.pending_persists.insert(cluster.key().to_string(), cluster.clone());
             let repo = Arc::clone(repo);
+            let key = cluster.key().to_string();
+            let pending = Arc::new(self.pending_persists.clone());
             tokio::spawn(async move {
-                let key = cluster.key();
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                 if let Err(e) = repo.insert_cluster(&cluster).await {
                     tracing::error!("Error persist_cluster: {}: {}", key, e);
                 }
+                pending.remove(&key);
             });
         }
     }
@@ -298,12 +322,11 @@ impl ClusterService {
 
     pub fn insert_markets(&self, game_id: &str, markets: Vec<Market>) -> Vec<Arbitrage> {
         let mut arbitrages = Vec::new();
-
         if let Some(cluster_key_ref) = self.game_id_to_fixture_cluster_key.get(game_id)
-            && let Some(game_date_ref) = self.cluster_id_to_date.get(cluster_key_ref.key())
+            && let Some(game_date_ref) = self.cluster_id_to_date.get(cluster_key_ref.value())
             && let Some(clusters_on_date_ref) = self.clusters.get_mut(game_date_ref.value())
             && let Some(mut cluster_ref) =
-                clusters_on_date_ref.value().get_mut(cluster_key_ref.key())
+                clusters_on_date_ref.value().get_mut(cluster_key_ref.value())
         {
             let cluster = cluster_ref.value_mut();
             if cluster.get_game(game_id).is_some() {
@@ -316,6 +339,8 @@ impl ClusterService {
                 if let Some(market_service) = &self.market_service {
                     market_service.send_new_market_update(game_id, new_markets);
                 }
+
+                let _ = self.event_tx.send(cluster.clone());
 
                 if cluster.game_count() > 1 {
                     self.persist_cluster(Arc::clone(&cluster));

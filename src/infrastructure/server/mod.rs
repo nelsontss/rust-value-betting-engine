@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
-use tokio::signal;
-
 use crate::infrastructure::server::routes::routes::{AppState, build_router};
 
-pub async fn serve(app_state: Arc<AppState>) {
+pub async fn serve(app_state: Arc<AppState>, shutdown: impl std::future::Future<Output = ()> + Send + 'static) {
     let app = build_router(app_state);
     let port = std::env::var("PORT").unwrap_or_else(|_| "3005".into());
 
@@ -13,30 +11,9 @@ pub async fn serve(app_state: Arc<AppState>) {
         .unwrap();
 
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown)
         .await
         .unwrap();
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
 }
 
 pub mod dto;
