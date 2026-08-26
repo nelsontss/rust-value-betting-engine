@@ -9,6 +9,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts"
+import { Button } from "@/components/ui/button"
 import type { MarketHistoryPoint } from "@/hooks/useClusterMarketHistory"
 
 interface MarketChartProps {
@@ -22,15 +23,26 @@ interface ChartDataPoint {
   [key: string]: string | number
 }
 
+const INTERVALS = [
+  { label: "1H", duration: 60 * 60 * 1000 },
+  { label: "3H", duration: 3 * 60 * 60 * 1000 },
+  { label: "6H", duration: 6 * 60 * 60 * 1000 },
+  { label: "1D", duration: 24 * 60 * 60 * 1000 },
+  { label: "3D", duration: 3 * 24 * 60 * 60 * 1000 },
+] as const
+
+type IntervalLabel = (typeof INTERVALS)[number]["label"]
+
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "_")
 }
 
 export function MarketChart({ data, targetMarket, games }: MarketChartProps) {
   const [hiddenLines, setHiddenLines] = useState<Set<string>>(new Set())
+  const [selectedInterval, setSelectedInterval] = useState<IntervalLabel>("1D")
 
   const allLineKeys = useMemo(() => {
-    const prefixList = games.map((g) => slugify(g.platform))
+    const prefixList = [...new Set(games.map((g) => slugify(g.platform)))]
     const oddKeys: Record<string, string[]> = {
       MatchResult: ["home", "draw", "away"],
       Moneyline: ["home", "away"],
@@ -74,30 +86,40 @@ export function MarketChart({ data, targetMarket, games }: MarketChartProps) {
   const handleLegendItem = useCallback((dataKey: string, meta: boolean) => {
     toggleLines([dataKey], !meta)
   }, [toggleLines])
+  const intervalCutoff = useMemo(() => {
+    const interval = INTERVALS.find((i) => i.label === selectedInterval)!
+    return Date.now() - interval.duration
+  }, [selectedInterval])
+
   const chartData = useMemo(() => {
     const filtered = data.filter((point) => {
+      const ts = new Date(point.timestamp).getTime()
+      if (ts < intervalCutoff) return false
       if ("line" in targetMarket && "line" in point.market) {
         return point.market.line === targetMarket.line
       }
       return true
     })
 
-    const groupKey = (ts: string) =>
-      new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    const timeFmt = new Intl.DateTimeFormat([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    const dayTimeFmt = new Intl.DateTimeFormat([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
 
-    const groups = new Map<string, ChartDataPoint>()
-    const order: string[] = []
-    const platformBuckets = new Map<string, Set<string>>()
+    const groups = new Map<number, ChartDataPoint & { _ts: number }>()
+    const order: number[] = []
 
     for (const point of filtered) {
-      const key = groupKey(point.timestamp)
+      const ts = new Date(point.timestamp).getTime()
+      const key = Math.floor(ts / 60_000) * 60_000
       const prefix = slugify(point.platform)
 
-      if (!platformBuckets.has(prefix)) platformBuckets.set(prefix, new Set())
-      platformBuckets.get(prefix)!.add(key)
-
       if (!groups.has(key)) {
-        groups.set(key, { timestamp: key })
+        groups.set(key, { timestamp: "", _ts: key })
         order.push(key)
       }
       const row = groups.get(key)!
@@ -134,34 +156,42 @@ export function MarketChart({ data, targetMarket, games }: MarketChartProps) {
       }
     }
 
-    // spread single-timestamp platforms as constant lines across all times
-    if (order.length > 1) {
-      for (const [prefix, buckets] of platformBuckets) {
-        if (buckets.size > 1) continue
-        const key = [...buckets][0]
-        const sourceRow = groups.get(key)
-        if (!sourceRow) continue
-        for (const targetKey of order) {
-          if (targetKey === key) continue
-          const targetRow = groups.get(targetKey)!
-          for (const k of Object.keys(sourceRow)) {
-            if (k === "timestamp") continue
-            if (k.startsWith(`${prefix}_`)) {
-              targetRow[k] = sourceRow[k]
-            }
-          }
-        }
+    order.sort((a, b) => a - b)
+
+    const last = new Map<string, number>()
+    for (const ts of order) {
+      const row = groups.get(ts)!
+      for (const k of allLineKeys) {
+        const v = row[k]
+        if (v !== undefined) last.set(k, v as number)
+        else if (last.has(k)) row[k] = last.get(k)!
       }
     }
 
-    order.sort()
-    return order.map((k) => groups.get(k)!)
-  }, [data, targetMarket])
+    const spansMultipleDays =
+      new Set(
+        order.map((ts) => new Intl.DateTimeFormat([], { dateStyle: "short" }).format(new Date(ts))),
+      ).size > 1
+
+    return order.map((k) => {
+      const row = groups.get(k)!
+      row.timestamp = (spansMultipleDays ? dayTimeFmt : timeFmt).format(new Date(k))
+      return row
+    })
+  }, [data, targetMarket, allLineKeys, intervalCutoff])
 
   if (chartData.length === 0) {
+    const hasAnyData = data.some((point) => {
+      if ("line" in targetMarket && "line" in point.market) {
+        return point.market.line === targetMarket.line
+      }
+      return true
+    })
     return (
       <div className="text-center text-muted-foreground py-8">
-        No historical data available for this market
+        {hasAnyData
+          ? `No data in the last ${selectedInterval}`
+          : "No historical data available for this market"}
       </div>
     )
   }
@@ -172,13 +202,36 @@ export function MarketChart({ data, targetMarket, games }: MarketChartProps) {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4">{marketLabel}</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">{marketLabel}</h3>
+        <div className="flex gap-1">
+          {INTERVALS.map((interval) => (
+            <Button
+              key={interval.label}
+              variant={selectedInterval === interval.label ? "default" : "ghost"}
+              size="xs"
+              onClick={() => setSelectedInterval(interval.label)}
+            >
+              {interval.label}
+            </Button>
+          ))}
+        </div>
+      </div>
       <ResponsiveContainer width="100%" height={400}>
         <LineChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="timestamp" tickCount={5} height={30} tick={{ fontSize: 11 }} />
-          <YAxis domain={["auto", "auto"]} tick={{ fontSize: 11 }} />
-          <Tooltip />
+          <YAxis
+            scale="log"
+            domain={["auto", "auto"]}
+            allowDataOverflow
+            tickFormatter={(v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2))}
+            tick={{ fontSize: 11 }}
+            width={45}
+          />
+          <Tooltip
+            formatter={(value) => (typeof value === "number" ? value.toFixed(2) : String(value ?? ""))}
+          />
           <Legend
             content={<LegendGrouped onPlatformClick={handleLegendPlatform} onItemClick={handleLegendItem} hiddenLines={hiddenLines} />}
           />
@@ -290,7 +343,8 @@ function getLineComponents(
     return s.toLowerCase().replace(/[^a-z0-9]/g, "_")
   }
 
-  return games.flatMap((game, gameIdx) => {
+  const deduped = [...new Map(games.map((g) => [slugify(g.platform), g])).values()]
+  return deduped.flatMap((game, gameIdx) => {
     const prefix = slugify(game.platform)
     const color = platformColors[gameIdx % platformColors.length]
 

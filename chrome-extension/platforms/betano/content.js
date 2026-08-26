@@ -1,11 +1,12 @@
 (function () {
   const SSR_PATHS = ['/sport/futebol/jogos-de-hoje/', '/sport/futebol/proximas-'];
-  if (!SSR_PATHS.some(p => location.pathname.startsWith(p))) return;
+  const LIVE_PATHS = ['/live/', '/en/live/'];
+  const isSSR = SSR_PATHS.some(p => location.pathname.startsWith(p));
+  const isLive = LIVE_PATHS.some(p => location.pathname.startsWith(p));
+  if (!isSSR && !isLive) return;
 
-  const API_URL = '/api/sport/futebol/jogos-de-hoje/?req=s,stnf,c,mb,mbl';
   const POLL_MS = 5000;
 
-  // ---- inject MAIN world listener for window.__oddsScraper ----
   (function () {
     const s = document.createElement('script');
     s.src = chrome.runtime.getURL('platforms/betano/main-world.js');
@@ -13,11 +14,15 @@
     (document.head || document.documentElement).appendChild(s);
   })();
 
-  // ---- helpers ----
-
   function sendToBackground(stats) {
     chrome.runtime.sendMessage({
       type: 'PLATFORM_DATA', platform: 'betano', timestamp: Date.now(), stats,
+    }).catch(() => {});
+  }
+
+  function sendLiveBlocks(blocks) {
+    chrome.runtime.sendMessage({
+      type: 'BETANO_LIVE_BLOCKS', platform: 'betano', timestamp: Date.now(), data: { blocks },
     }).catch(() => {});
   }
 
@@ -41,12 +46,11 @@
 
   async function fetchAndParse() {
     try {
-      const res = await fetch(API_URL);
+      const res = await fetch('/api/sport/futebol/jogos-de-hoje/?req=s,stnf,c,mb,mbl');
       if (!res.ok) return;
       const json = await res.json();
       const raw = json?.data;
       if (!raw) return;
-
       const blocks = raw.blocks ?? [];
       let events = 0, markets = 0;
       for (const b of blocks) {
@@ -54,13 +58,50 @@
         for (const e of b.events || []) markets += (e.markets || []).length;
       }
       const stats = { events, leagues: blocks.length, markets };
-
       exposeOnWindow(raw);
       saveToStorage(raw);
       sendToBackground(stats);
     } catch (_) {}
   }
 
-  fetchAndParse();
-  setInterval(fetchAndParse, POLL_MS);
+  function normalizeLive(json) {
+    const events = json?.events ?? {};
+    const markets = json?.markets ?? {};
+    const selections = json?.selections ?? {};
+    const leagues = json?.leagues ?? {};
+    const zones = json?.zones ?? {};
+    const byLeague = new Map();
+    for (const ev of Object.values(events)) {
+      if (ev.sportId !== 'FOOT') continue;
+      const home = (ev.participants || []).find(p => p.isHome);
+      const away = (ev.participants || []).find(p => !p.isHome);
+      if (!home || !away) continue;
+      const league = leagues[ev.leagueId] ?? {};
+      const blockKey = ev.leagueId;
+      if (!byLeague.has(blockKey)) byLeague.set(blockKey, { name: league.name ?? '', region: zones[ev.zoneId]?.name ?? '', events: [] });
+      const ms = (ev.marketIdList || []).map(id => markets[id]).filter(Boolean).map(m => ({ ...m, id: String(m.id), selections: (m.selectionIdList || []).map(sid => selections[sid]).filter(Boolean).map(s => ({ ...s, id: String(s.id) })) }));
+      byLeague.get(blockKey).events.push({ ...ev, id: String(ev.id), name: `${home.name} - ${away.name}`, leagueName: league.name ?? '', regionName: zones[ev.zoneId]?.name ?? '', markets: ms });
+    }
+    return [...byLeague.values()];
+  }
+
+  async function fetchLive() {
+    try {
+      const res = await fetch('/en/danae-webapi/api/live/overview/latest?includeVirtuals=true&queryLanguageId=1&queryOperatorId=7', { headers: { accept: 'application/json' } });
+      if (!res.ok) return;
+      const json = await res.json();
+      const blocks = normalizeLive(json);
+      if (blocks.length === 0) return;
+      sendLiveBlocks(blocks);
+    } catch (_) {}
+  }
+
+  if (isSSR) {
+    fetchAndParse();
+    setInterval(fetchAndParse, POLL_MS);
+  }
+  if (isLive) {
+    fetchLive();
+    setInterval(fetchLive, POLL_MS);
+  }
 })();

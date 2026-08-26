@@ -3,7 +3,9 @@ const PLATFORMS = [
     name: 'betano', label: 'Betano',
     todayUrl: 'https://www.betano.pt/en/api/sport/futebol/jogos-de-hoje/?req=s,stnf,c,mb,mbl',
     upcomingUrl: 'https://www.betano.pt/en/api/upcomingcoupon/?sid=FOOT&req=la,s,stnf,c,mb,mbl',
+    liveUrl: 'https://www.betano.pt/en/danae-webapi/api/live/overview/latest?includeVirtuals=true&queryLanguageId=1&queryOperatorId=7',
     referer: 'https://www.betano.pt/en/sport/futebol/jogos-de-hoje/',
+    liveReferer: 'https://www.betano.pt/en/live/',
     pollMs: 5000,
   },
 ];
@@ -49,11 +51,20 @@ function sendToNative(type, platform, data) {
 // ---- Fetch helpers ----
 
 async function fetchJson(url, referer) {
+  const headers = { 'Referer': referer, 'Accept': 'application/json, text/plain, */*' };
+  if (url.includes('danae-webapi')) {
+    headers['x-operator'] = '7';
+    headers['x-language'] = '1';
+  }
   const res = await fetch(url, {
-    headers: { 'Referer': referer },
+    headers,
     cache: 'no-cache',
+    credentials: 'include',
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    warn(`fetch ${url} -> ${res.status} ${res.statusText}`);
+    return null;
+  }
   return res.json();
 }
 
@@ -109,6 +120,81 @@ async function pollUpcoming(pf) {
   }
 }
 
+// Normalize the danae live store (events/markets/selections dicts joined by
+// id lists) into the standard `{ blocks }` shape the parser expects.
+function normalizeLive(json) {
+  const events = json?.events ?? {};
+  const markets = json?.markets ?? {};
+  const selections = json?.selections ?? {};
+  const leagues = json?.leagues ?? {};
+  const zones = json?.zones ?? {};
+
+  const byLeague = new Map();
+  for (const ev of Object.values(events)) {
+    if (ev.sportId !== 'FOOT') continue;
+    const home = (ev.participants || []).find((p) => p.isHome);
+    const away = (ev.participants || []).find((p) => !p.isHome);
+    if (!home || !away) continue;
+
+    const league = leagues[ev.leagueId] ?? {};
+    const blockKey = ev.leagueId;
+    if (!byLeague.has(blockKey)) {
+      byLeague.set(blockKey, {
+        name: league.name ?? '',
+        region: zones[ev.zoneId]?.name ?? '',
+        events: [],
+      });
+    }
+
+    const ms = (ev.marketIdList || [])
+      .map((id) => markets[id])
+      .filter(Boolean)
+      .map((m) => ({
+        ...m,
+        id: String(m.id),
+        selections: (m.selectionIdList || [])
+          .map((sid) => selections[sid])
+          .filter(Boolean)
+          .map((s) => ({ ...s, id: String(s.id) })),
+      }));
+
+    byLeague.get(blockKey).events.push({
+      ...ev,
+      id: String(ev.id),
+      name: `${home.name} - ${away.name}`,
+      leagueName: league.name ?? '',
+      regionName: zones[ev.zoneId]?.name ?? '',
+      markets: ms,
+    });
+  }
+
+  return [...byLeague.values()];
+}
+
+async function pollLive(pf) {
+  try {
+    const t0 = Date.now();
+    const json = await fetchJson(pf.liveUrl, pf.liveReferer);
+    if (!json) {
+      warn(`${pf.name}/live empty response`);
+      return;
+    }
+    const blocks = normalizeLive(json);
+    if (blocks.length === 0) {
+      warn(`${pf.name}/live normalized 0 blocks`);
+      return;
+    }
+
+    const elapsed = Date.now() - t0;
+    const stats = countStats(blocks);
+    log(`${pf.name}/live: ${stats.events} events, ${stats.leagues} leagues, ${stats.markets} markets (${elapsed}ms)`);
+    updateState(pf.name, stats);
+    sendToNative('odds_update', pf.name, { blocks });
+  } catch (err) {
+    warn(`${pf.name}/live failed: ${err.message}`);
+  }
+}
+
 function updateState(platform, stats) {
   if (!platformState[platform]) platformState[platform] = { stats };
   else platformState[platform].stats = stats;
@@ -119,8 +205,10 @@ function startPolling(pf) {
   log(`starting ${pf.name} polling every ${pf.pollMs}ms`);
   pollToday(pf);
   pollUpcoming(pf);
+  pollLive(pf);
   setInterval(() => pollToday(pf), pf.pollMs);
   setInterval(() => pollUpcoming(pf), pf.pollMs);
+  setInterval(() => pollLive(pf), pf.pollMs);
 }
 
 // ---- Lifecycle ----
@@ -132,6 +220,15 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   log('onStartup');
   for (const pf of PLATFORMS) startPolling(pf);
+});
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === 'BETANO_LIVE_BLOCKS' && msg?.data?.blocks) {
+    const stats = countStats(msg.data.blocks);
+    log(`betano/live (content): ${stats.events} events, ${stats.leagues} leagues, ${stats.markets} markets`);
+    updateState('betano', stats);
+    sendToNative('odds_update', 'betano', msg.data);
+  }
 });
 
 // ---- Popup ----

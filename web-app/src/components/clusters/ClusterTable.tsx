@@ -33,18 +33,9 @@ function repGame(cluster: Cluster): Game | null {
 }
 
 function sortNextFirst(clusters: Cluster[]): Cluster[] {
-  const now = Date.now()
-  const withTime = clusters.map((c) => ({
-    cluster: c,
-    time: parseDate(repGame(c)?.date ?? ""),
-  }))
-  const future = withTime
-    .filter((x) => x.time !== MAX_SAFE_DATE && x.time >= now)
-    .sort((a, b) => a.time - b.time)
-  const past = withTime
-    .filter((x) => x.time === MAX_SAFE_DATE || x.time < now)
-    .sort((a, b) => b.time - a.time)
-  return [...future, ...past].map((x) => x.cluster)
+  return [...clusters].sort(
+    (a, b) => parseDate(repGame(a)?.date ?? "") - parseDate(repGame(b)?.date ?? ""),
+  )
 }
 
 function formatDate(ts: number): string {

@@ -16,7 +16,13 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "content_scripts": [],
+  "content_scripts": [
+    {
+      "matches": ["https://www.betano.pt/*"],
+      "js": ["platforms/betano/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Odds Scraper"
