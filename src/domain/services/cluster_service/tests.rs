@@ -33,6 +33,7 @@ fn game(
         fixture_date(hour, min),
         platform,
         vec![],
+    None,
     )
 }
 
@@ -71,6 +72,7 @@ fn fuzzy_portugal_game(home_team: &str, away_team: &str, platform: Platform) -> 
         fixture_date(15, 30),
         platform,
         vec![],
+    None,
     )
 }
 
@@ -83,6 +85,7 @@ fn fuzzy_england_game(home_team: &str, away_team: &str, platform: Platform) -> G
         fixture_date(15, 30),
         platform,
         vec![],
+    None,
     )
 }
 
@@ -95,6 +98,7 @@ fn porto_benfica(platform: Platform) -> Game {
         fixture_date(15, 30),
         platform,
         vec![],
+    None,
     )
 }
 
@@ -107,6 +111,7 @@ fn sporting_braga(platform: Platform) -> Game {
         fixture_date(17, 30),
         platform,
         vec![],
+    None,
     )
 }
 
@@ -119,6 +124,7 @@ fn arsenal_burnley(platform: Platform) -> Game {
         fixture_date(18, 30),
         platform,
         vec![],
+    None,
     )
 }
 
@@ -131,6 +137,7 @@ fn porto_benfica_with_markets(platform: Platform, markets: Vec<Market>) -> Game 
         fixture_date(15, 30),
         platform,
         markets,
+        None,
     )
 }
 
@@ -713,6 +720,7 @@ async fn sweep_ended_clusters_removes_only_elapsed_fixtures() {
         now - Duration::minutes(150),
         Platform::Betano,
         vec![],
+    None,
     );
     let past_polymarket = Game::new(
         "Benfica",
@@ -722,6 +730,7 @@ async fn sweep_ended_clusters_removes_only_elapsed_fixtures() {
         now - Duration::minutes(150),
         Platform::Polymarket,
         vec![],
+    None,
     );
     let future_game = Game::new(
         "Porto",
@@ -731,6 +740,7 @@ async fn sweep_ended_clusters_removes_only_elapsed_fixtures() {
         now + Duration::hours(2),
         Platform::Betano,
         vec![],
+    None,
     );
 
     let cluster_service = ClusterService::new();

@@ -174,7 +174,7 @@ impl Outcome {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum MarketType {
     MatchResult,
     Moneyline,

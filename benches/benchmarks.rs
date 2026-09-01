@@ -116,6 +116,7 @@ fn generate_games(count: usize, with_markets: bool, distinct: bool) -> Vec<Game>
                 fixture_date(day, hour, 30),
                 PLATFORMS[i % PLATFORMS.len()],
                 markets,
+                None,
             )
         })
         .collect()
@@ -535,7 +536,7 @@ fn bench_sse_broadcast(c: &mut Criterion) {
             |b, games| {
                 b.to_async(&rt).iter(|| async {
                     let service = ClusterService::new();
-                    let mut rx = service.subscribe_to_game_updates();
+                    let mut rx = service.subscribe_to_cluster_updates();
                     // Insert games — this triggers broadcast for clusters with >1 game
                     service.insert_games(black_box(games.clone()));
                     let mut count = 0usize;
@@ -574,6 +575,7 @@ fn bench_sse_concurrent_connections(c: &mut Criterion) {
                     fixture_date(0, 15, 30),
                     PLATFORMS[i % PLATFORMS.len()],
                     vec![],
+                    None,
                 )
             })
             .collect()
@@ -605,7 +607,7 @@ fn bench_sse_concurrent_connections(c: &mut Criterion) {
                             // 1. Register all subscribers (simulating SSE connections)
                             let mut receivers = Vec::with_capacity(subs);
                             for _ in 0..subs {
-                                receivers.push(service.subscribe_to_game_updates());
+                                receivers.push(service.subscribe_to_cluster_updates());
                             }
 
                             // 2. Insert games — triggers broadcasts per cluster update
@@ -664,6 +666,7 @@ fn bench_cross_platform_clustering(c: &mut Criterion) {
                         )
                         .unwrap(),
                     ],
+                    None,
                 )
             })
             .collect();
@@ -797,6 +800,7 @@ fn bench_market_history_get_game_history(c: &mut Criterion) {
                     Market::total("mh-t", 2.5, 1.85, 1.95).unwrap(),
                     Market::moneyline("mh-ml", 1.8, 2.0).unwrap(),
                 ],
+                None,
             );
             repository
                 .insert_game(&game)

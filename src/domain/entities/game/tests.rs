@@ -20,6 +20,7 @@ fn build_game(home_team: &str, away_team: &str, date: NaiveDateTime) -> Game {
         date,
         DEFAULT_PLATFORM,
         vec![],
+    None,
     )
 }
 
@@ -59,6 +60,7 @@ fn assert_not_same_fixture_with_context(
         date,
         DEFAULT_PLATFORM,
         vec![],
+    None,
     );
     let right = Game::new(
         right.0,
@@ -68,6 +70,7 @@ fn assert_not_same_fixture_with_context(
         date,
         DEFAULT_PLATFORM,
         vec![],
+    None,
     );
 
     assert!(!left.same_fixture_as(&right));
@@ -180,6 +183,7 @@ fn new_indexes_markets_by_derived_market_type() {
             moneyline_market("moneyline", 2.0, 1.8),
             total_market("total", 2.5, 1.9, 1.9),
         ],
+    None,
     );
 
     assert!(matches!(
@@ -202,6 +206,7 @@ fn update_market_replaces_existing_market_with_same_logical_type() {
         fixture_date(1),
         DEFAULT_PLATFORM,
         vec![moneyline_market("opening", 2.0, 1.8)],
+    None,
     );
 
     game.update_markets(vec![moneyline_market("updated", 2.2, 1.7)]);
@@ -224,6 +229,7 @@ fn update_market_adds_new_market_for_different_logical_type() {
         fixture_date(1),
         DEFAULT_PLATFORM,
         vec![moneyline_market("moneyline", 2.0, 1.8)],
+    None,
     );
 
     game.update_markets(vec![total_market("total", 2.5, 1.9, 1.9)]);

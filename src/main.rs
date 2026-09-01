@@ -4,7 +4,10 @@ use rust_value_betting_engine::{
     application::services::bookmaker_scrapper_service::BookmakerScrapperService,
     domain::{
         ClusterService,
-        services::{market_service::MarketService, statistics_service::StatisticsService},
+        services::{
+            alert_service::AlertService, market_service::MarketService,
+            statistics_service::StatisticsService,
+        },
     },
     infrastructure::{
         repositories::{
@@ -55,6 +58,10 @@ async fn main() {
             .with_statistics_service(Arc::clone(&statistics_service)),
     );
     cluster_service.start_end_of_game_sweeper();
+    let alert_service = Arc::new(AlertService::new(
+        Arc::clone(&cluster_service),
+        Arc::clone(&statistics_service),
+    ));
     let cs_bookmaker_clone = cluster_service.clone();
     let engine = tokio::spawn(async move {
         let mut bookmaker_scrapper_service = BookmakerScrapperService::new(cs_bookmaker_clone);
@@ -66,6 +73,7 @@ async fn main() {
         cluster_service,
         market_service,
         statistics_service,
+        alert_service,
     });
     let shutdown = async {
         tokio::signal::ctrl_c().await.expect("failed to listen for ctrl+c");

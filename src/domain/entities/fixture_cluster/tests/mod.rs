@@ -23,6 +23,7 @@ fn game_with_markets(platform: Platform, markets: Vec<(MarketType, Market)>) -> 
         fixture_date(15, 30),
         platform,
         markets.into_iter().map(|(_, market)| market).collect(),
+    None,
     )
 }
 
@@ -320,6 +321,7 @@ fn try_to_add_game_returns_err_and_keeps_cluster_unchanged_for_different_fixture
         fixture_date(15, 30),
         Platform::Betano,
         vec![moneyline_market("betclic-moneyline", 2.1, 1.75).1],
+    None,
     );
     let different_game_id = different_game.id.clone();
 

@@ -32,12 +32,17 @@ impl GameRepository {
                 competition TEXT NOT NULL,
                 platform TEXT NOT NULL,
                 date INTEGER NOT NULL,
+                link TEXT,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )",
         )
         .execute(&self.pool)
         .await?;
+
+        let _ = sqlx::query("ALTER TABLE games ADD COLUMN link TEXT")
+            .execute(&self.pool)
+            .await;
 
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS markets (
@@ -80,8 +85,8 @@ impl GameRepository {
     pub async fn insert_game(&self, game: &Game) -> Result<()> {
         let now = Utc::now().timestamp();
         sqlx::query(
-            "INSERT INTO games (id, home_team, away_team, country, competition, platform, date, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO games (id, home_team, away_team, country, competition, platform, date, link, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&game.id)
         .bind(game.home_team())
@@ -90,6 +95,7 @@ impl GameRepository {
         .bind(game.competition())
         .bind(platform_to_string(game.platform()))
         .bind(game.date.and_utc().timestamp())
+        .bind(game.link().map(|u| u.to_string()))
         .bind(now)
         .bind(now)
         .execute(&self.pool)
@@ -129,8 +135,8 @@ impl GameRepository {
     ) -> Result<()> {
         let now = Utc::now().timestamp();
         sqlx::query(
-            "INSERT INTO games (id, home_team, away_team, country, competition, platform, date, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "INSERT INTO games (id, home_team, away_team, country, competition, platform, date, link, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET
                  home_team = excluded.home_team,
                  away_team = excluded.away_team,
@@ -138,6 +144,7 @@ impl GameRepository {
                  competition = excluded.competition,
                  platform = excluded.platform,
                  date = excluded.date,
+                 link = COALESCE(excluded.link, link),
                  updated_at = excluded.updated_at",
         )
         .bind(&game.id)
@@ -147,6 +154,7 @@ impl GameRepository {
         .bind(game.competition())
         .bind(platform_to_string(game.platform()))
         .bind(game.date.and_utc().timestamp())
+        .bind(game.link().map(|u| u.to_string()))
         .bind(now)
         .bind(now)
         .execute(conn)
@@ -170,6 +178,8 @@ impl GameRepository {
         let date = DateTime::from_timestamp(date_ts, 0)
             .map(|dt| dt.naive_utc())
             .ok_or_else(|| format!("Invalid date timestamp for game '{}'", game_id))?;
+        let link: Option<String> = row.try_get("link").unwrap_or(None);
+        let link_url = link.and_then(|s| s.parse().ok());
 
         let game = Game::new_with_id(
             &row.try_get::<String, _>("id")?,
@@ -180,6 +190,7 @@ impl GameRepository {
             date,
             platform_from_string(&row.try_get::<String, _>("platform")?)?,
             markets,
+            link_url,
         );
 
         Ok(Some(game))
@@ -188,7 +199,7 @@ impl GameRepository {
     pub async fn update_game(&self, game: &Game) -> Result<()> {
         let now = Utc::now().timestamp();
         sqlx::query(
-            "UPDATE games SET home_team = ?, away_team = ?, country = ?, competition = ?, platform = ?, date = ?, updated_at = ?
+            "UPDATE games SET home_team = ?, away_team = ?, country = ?, competition = ?, platform = ?, date = ?, link = COALESCE(?, link), updated_at = ?
              WHERE id = ?",
         )
         .bind(game.home_team())
@@ -197,6 +208,7 @@ impl GameRepository {
         .bind(game.competition())
         .bind(platform_to_string(game.platform()))
         .bind(game.date.and_utc().timestamp())
+        .bind(game.link().map(|u| u.to_string()))
         .bind(now)
         .bind(&game.id)
         .execute(&self.pool)
@@ -576,6 +588,7 @@ mod tests {
                     Odd::new(1.9).unwrap(),
                 )),
             ],
+        None,
         )
     }
 

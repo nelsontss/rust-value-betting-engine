@@ -142,12 +142,13 @@ impl FixtureClusterRepository {
     pub async fn insert_cluster_diffs(
         &self,
         fixture_key: &str,
-        diffs: &HashMap<(MarketType, Outcome), f64>,
+        diffs: &HashMap<MarketType, HashMap<Outcome, f64>>,
     ) -> Result<()> {
         let now = Utc::now().timestamp();
         let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
 
-        for ((market_type, outcome), diff) in diffs {
+        for (market_type, inner) in diffs {
+            for (outcome, diff) in inner {
             sqlx::query(
                 "INSERT INTO fixture_cluster_diff (fixture_key, market_type, outcome, diff, created_at)
                  VALUES (?, ?, ?, ?, ?)
@@ -162,6 +163,7 @@ impl FixtureClusterRepository {
             .bind(now)
             .execute(&mut *tx)
             .await?;
+            }
         }
 
         tx.commit().await?;
@@ -169,7 +171,10 @@ impl FixtureClusterRepository {
         Ok(())
     }
 
-    async fn get_cluster_diffs(&self, key: &str) -> Result<HashMap<(MarketType, Outcome), f64>> {
+    async fn get_cluster_diffs(
+        &self,
+        key: &str,
+    ) -> Result<HashMap<MarketType, HashMap<Outcome, f64>>> {
         let rows = sqlx::query(
             "SELECT market_type, outcome, diff FROM fixture_cluster_diff WHERE fixture_key = ?",
         )
@@ -177,11 +182,11 @@ impl FixtureClusterRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        let mut diffs = HashMap::with_capacity(rows.len());
+        let mut diffs: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
         for row in rows {
             match parse_diff_row(&row)? {
                 Some((market_type, outcome, diff)) => {
-                    diffs.insert((market_type, outcome), diff);
+                    diffs.entry(market_type).or_default().insert(outcome, diff);
                 }
                 None => {
                     tracing::warn!(

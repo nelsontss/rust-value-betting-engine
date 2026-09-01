@@ -1,6 +1,9 @@
 use chrono::NaiveDateTime;
+use deunicode::deunicode;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use url::Url;
 
 #[cfg(test)]
 mod tests;
@@ -12,10 +15,28 @@ use crate::domain::entities::{Market, Platform};
 pub struct SignalRFrame {
     #[serde(rename = "type")]
     pub msg_type: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target: Option<String>,
-    #[serde(rename = "invocationId")]
+    #[serde(rename = "invocationId", skip_serializing_if = "Option::is_none")]
     pub invocation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_error_string")]
+    pub error: Option<String>,
+    #[serde(rename = "allowReconnect", skip_serializing_if = "Option::is_none")]
+    pub allow_reconnect: Option<bool>,
+}
+
+fn deserialize_error_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<Value>::deserialize(deserializer)?;
+    Ok(opt.and_then(|v| match v {
+        Value::String(s) => Some(s),
+        Value::Null => None,
+        _ => Some(v.to_string()),
+    }))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -29,6 +50,10 @@ pub struct SwitchedFixture {
 #[derive(Debug)]
 pub enum BwinWSEvent {
     Ping,
+    Close {
+        error: String,
+        allow_reconnect: bool,
+    },
     ConnectionAck {
         connection_id: String,
     },
@@ -60,6 +85,20 @@ impl BwinWSEvent {
     pub fn from_frame(frame: SignalRFrame) -> Option<Self> {
         match frame.msg_type {
             6 => Some(Self::Ping),
+            7 => {
+                let err = frame.error.clone().unwrap_or_default();
+                let allow = frame.allow_reconnect.unwrap_or(true);
+                if err.contains("maximum message size") {
+                    eprintln!(
+                        "[bwin] server closed connection: message too large ({}), reduce subscription batch size",
+                        err
+                    );
+                }
+                Some(Self::Close {
+                    error: err,
+                    allow_reconnect: allow,
+                })
+            }
             1 => {
                 let args = frame.arguments.as_ref()?;
                 let data = args.first()?;
@@ -87,9 +126,16 @@ impl BwinWSEvent {
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string())
                             .or_else(|| {
-                                data.get("topic").and_then(|t| t.as_str()).and_then(|topic| {
-                                    topic.split('|').nth(2)?.split('_').next().map(|s| s.to_string())
-                                })
+                                data.get("topic")
+                                    .and_then(|t| t.as_str())
+                                    .and_then(|topic| {
+                                        topic
+                                            .split('|')
+                                            .nth(2)?
+                                            .split('_')
+                                            .next()
+                                            .map(|s| s.to_string())
+                                    })
                             })
                             .unwrap_or_default();
                         Some(Self::OptionMarketUpdate {
@@ -153,6 +199,8 @@ impl BwinWSEvent {
             target: Some("Subscribe".into()),
             invocation_id: Some("0".into()),
             arguments: Some(vec![serde_json::json!({ "topics": topics })]),
+            error: None,
+            allow_reconnect: None,
         }
     }
 }
@@ -324,6 +372,23 @@ impl BwinParser {
                 None => continue,
             };
 
+            let fallback_name = format!("{home_team} - {away_team}");
+            let name = fixture
+                .get("name")
+                .and_then(|n| n.get("value"))
+                .and_then(|v| v.as_str())
+                .unwrap_or(&fallback_name);
+            let slug_raw = deunicode(name).to_lowercase();
+            let slug = Regex::new(r"[^a-z0-9]+")
+                .unwrap()
+                .replace_all(&slug_raw, "-")
+                .trim_matches('-')
+                .to_string();
+            let link = Url::parse(&format!(
+                "https://www.bwin.pt/pt/sports/eventos/{slug}-{fixture_id}"
+            ))
+            .ok();
+
             let option_markets = match fixture.get("optionMarkets").and_then(|m| m.as_array()) {
                 Some(m) => m,
                 None => {
@@ -336,6 +401,7 @@ impl BwinParser {
                         date,
                         Platform::Bwin,
                         vec![],
+                        link.clone(),
                     ));
                     continue;
                 }
@@ -357,6 +423,7 @@ impl BwinParser {
                 date,
                 Platform::Bwin,
                 markets,
+                link,
             ));
         }
 

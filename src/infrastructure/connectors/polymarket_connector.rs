@@ -14,11 +14,13 @@ use polymarket_client_sdk_v2::gamma::{
         response::{Event, Market},
     },
 };
+use regex::Regex;
 use rust_decimal::prelude::*;
 use serde::Deserialize;
 use tokio::{net::TcpStream, sync::mpsc::Sender};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 use tracing::{debug, info, warn};
+use url::Url;
 
 use crate::{
     application::services::bookmaker_scrapper_service::BookmakerEvent,
@@ -61,6 +63,13 @@ struct GammaEvent {
     event: Event,
     #[serde(rename = "sport")]
     sport: Option<GammaSport>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GammaKeysetResponse {
+    events: Vec<GammaEvent>,
+    #[serde(default)]
+    next_cursor: Option<String>,
 }
 
 type PriceWebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -296,7 +305,7 @@ impl PolymarketConnector {
     }
 
     pub async fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
-        eprintln!("polymarket start");
+        eprintln!("polymarket start: {:?}", Utc::now());
         let ws_url = "wss://ws-subscriptions-clob.polymarket.com/ws/market";
         let poll_interval = Duration::from_secs(3600);
         let retry_delay = Duration::from_secs(10);
@@ -312,7 +321,7 @@ impl PolymarketConnector {
             &mut token_to_event,
         )
         .await;
-
+        eprintln!("fetch_and_update ended: {:?}", Utc::now());
         loop {
             match Self::run_price_stream(
                 &self.gamma_client,
@@ -622,9 +631,15 @@ impl PolymarketConnector {
                 continue;
             }
             if let Some(game) = event_to_game(event) {
-                if let Some(existing) = games_by_id.get_mut(&game.id) {
+                if games_by_id.contains_key(&game.id) {
                     let new_markets: Vec<_> = game.markets().values().cloned().collect();
-                    existing.update_markets(new_markets);
+                    //existing.update_markets(new_markets);
+                    let _ = sender
+                        .send(BookmakerEvent::UpdateMarkets((
+                            game.id.clone(),
+                            new_markets,
+                        )))
+                        .await;
                 } else {
                     games_by_id.insert(game.id.clone(), game);
                 }
@@ -655,36 +670,52 @@ impl PolymarketConnector {
 
     async fn fetch_events(gamma: &Client) -> Result<Vec<GammaEvent>> {
         let host = gamma.host();
-        let end_date_min = (Utc::now() - Duration::from_mins(200)).format("%Y-%m-%dT%H:%M:%SZ");
-        let end_date_max = (Utc::now() + Duration::from_hours(48)).format("%Y-%m-%dT%H:%M:%SZ");
-
-        let mut events = Vec::new();
-        let mut offset = 0;
         let client = reqwest::Client::builder()
             .user_agent("Mozilla/5.0")
+            .timeout(Duration::from_secs(15))
             .build()?;
+        let end_date_min = (Utc::now() - Duration::from_mins(200)).format("%Y-%m-%dT%H:%M:%SZ");
+        let end_date_max = (Utc::now() + Duration::from_hours(48)).format("%Y-%m-%dT%H:%M:%SZ");
+        let host = host.to_string();
+        let mut events = Vec::new();
+        let mut after_cursor: Option<String> = None;
         loop {
-            let url = format!(
-                "{host}events?tag_slug=soccer&closed=false&ascending=true&limit=100&offset={offset}&end_date_min={end_date_min}&end_date_max={end_date_max}"
+            let mut url = format!(
+                "{host}events/keyset?tag_slug=soccer&closed=false&ascending=true\
+                 &limit=500\
+                 &end_date_min={end_date_min}&end_date_max={end_date_max}"
             );
-            let response = client.get(&url).send().await?;
-            if !response.status().is_success() {
-                warn!(
-                    status = %response.status(),
-                    offset,
-                    "Polymarket events page failed, stopping pagination"
-                );
+            if let Some(cursor) = &after_cursor {
+                url.push_str(&format!("&after_cursor={cursor}"));
+            }
+            let resp = match client.get(&url).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!(?e, "fetch_events request failed");
+                    break;
+                }
+            };
+            if !resp.status().is_success() {
+                warn!(status = %resp.status(), "fetch_events non-success, stopping pagination");
                 break;
             }
-            let page: Vec<GammaEvent> = response.json().await?;
-            let page_len = page.len();
-            events.extend(page);
-            if page_len < 100 {
+            let page: GammaKeysetResponse = match resp.json().await {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!(?e, "fetch_events decode failed");
+                    break;
+                }
+            };
+            let is_last = page.next_cursor.is_none();
+            events.extend(page.events);
+            match page.next_cursor {
+                Some(c) => after_cursor = Some(c),
+                None => break,
+            }
+            if is_last {
                 break;
             }
-            offset += 100;
-            if offset >= 5000 {
-                warn!("Polymarket events pagination hit cap of 5000");
+            if events.len() >= 5000 {
                 break;
             }
         }
@@ -870,6 +901,19 @@ fn event_to_game(event: &GammaEvent) -> Option<Game> {
         return None;
     }
 
+    let slug = event.event.slug.clone();
+    let link = slug.map_or(None, |slug| {
+        let league = slug.split_once('-').map(|(a, _)| a).unwrap_or(&slug);
+
+        let re = Regex::new(r"\d{4}-\d{2}-\d{2}").unwrap();
+        let pure_slug = &slug[..re.find(&slug).unwrap().end()];
+
+        Url::parse(&format!(
+            "https://polymarket.com/sports/{league}/{pure_slug}"
+        ))
+        .map_or(None, |url| Some(url))
+    });
+
     Some(Game::new_with_id(
         &polymarket_game_id(&home_team, &away_team, game_start),
         &home_team,
@@ -879,6 +923,7 @@ fn event_to_game(event: &GammaEvent) -> Option<Game> {
         game_start,
         Platform::Polymarket,
         game_markets,
+        link,
     ))
 }
 

@@ -325,16 +325,41 @@
         32.3 [X] Refactor clusters view into `ClusterTable` + `ClusterInspector`
         32.4 [X] Capture UI spec in `web-app/section-dashboard-snapshot.md`
 
-33. [ ] Value alerts (see `docs/alerts.md`)
+33. [X] Value alerts (see `docs/alerts.md`)
 
-        33.1 [ ] Wire draft `ValueAlert` entity into the domain module tree
-        33.2 [ ] Track per-outcome rolling percentile state per cluster in `ClusterService`
-        33.3 [ ] Emit alert when Polymarket-vs-bookie diff crosses p90/p10 threshold (bet NO / bet YES) with hysteresis
+        33.1 [X] Add `AlertService` / `AlertEvent::MarketClusterDiffDivergency` subscribing to `ClusterService` cluster updates (`src/domain/services/alert_service.rs`)
+        33.2 [X] Compare per-outcome live diff against `StatisticsService` p05/p95 thresholds (outside-band → alert) with broadcast channel
+        33.3 [X] Add `alert_response` DTO and SSE endpoint `GET /alerts` (`src/infrastructure/server/dto/alert_response.rs`, `routes/alerts.rs`)
+        33.4 [X] Wire `AlertService` in `main.rs` and expose via `AppState` / `routes.rs`
+        33.5 [X] Add frontend alerts store, `useAlerts` hook, `AlertsPage`/`AlertsToaster`, `/alerts` route and nav entry (`web-app/src/stores/alerts.ts`, `hooks/useAlerts.ts`, `components/alerts/*`)
+        33.6 [X] Document design in `docs/alerts.md`
 
-34. [ ] Live (in-play) data from all platforms (see `docs/live-data-plan.md`)
+34. [X] Live (in-play) data from all platforms (see `docs/live-data-plan.md`)
 
-        34.1 [ ] Add `Phase { PreMatch, Live }` field to the `Game` entity set by parsers
-        34.2 [ ] Betano: discover live coupon API and poll it from the Chrome extension alongside today's games
-        34.3 [ ] LeBull: discover live endpoint, add `LIVE_URL` polling in `LeBullConnector`, parse without the `isLive` skip
-        34.4 [ ] Bwin: follow `MainToLiveUpdate` fixture switch to live topics and mark updates as live
-        34.5 [ ] Gate diff/statistics computation on matching phases; define stale-game retention policy
+        34.1 [X] No `Phase`/`is_live` on `Game` — live coverage via same `InsertGames`/`UpdateMarkets` flow
+        34.2 [X] Betano: discover live API `GET /danae-webapi/api/live/overview/latest` + extension `pollLive` normalization to `{ blocks }` shape
+        34.3 [X] LeBull: add `LIVE_URL` (`/leagues/inplay`) polling and remove `isLive` skip in `lebull_parser.rs`
+        34.4 [X] Bwin: handle `MainToLiveUpdate`/`FixtureUpdate`/`OptionMarketUpdate`/`Close` frames, accept `Suspended` markets, chunked subscribe (40 topics/msg), exponential-backoff reconnect loop
+        34.5 [X] Statistics/diffs treat all snapshots uniformly
+
+35. [X] Game deep-link and diff model
+
+        35.1 [X] Add `link: Option<Url>` to `Game` (`game.rs` + `game/tests.rs` + parsers set link) and expose via `game_response` DTO
+        35.2 [X] Refactor `FixtureCluster` diff storage from `HashMap<(MarketType, Outcome), _>` to `HashMap<MarketType, HashMap<Outcome, _>>` (`fixture_cluster.rs`, `cluster_service.rs`, repositories)
+        35.3 [X] Refactor `StatisticsService` `historical_stats` → `historical_diffs: DashMap<MarketType, HashMap<Outcome, ClusterStatistics>>` and nested `get_historical_statistics`
+        35.4 [X] Persist nested diff shape in `FixtureClusterRepository` / `GameRepository` migrations and update DTOs (`cluster_response`, `statistics_response`)
+        35.5 [X] Add `regex` crate and `url` usage for link handling
+
+36. [X] Connector and parser improvements
+
+        36.1 [X] Polymarket: switch Gamma pagination to `events/keyset` (`limit=500` + `after_cursor`), add `GammaKeysetResponse`, send `UpdateMarkets` for existing games
+        36.2 [X] Bwin: chunk topics into 40-per-message subscribes, handle `Close` frame, reconnect resilience
+        36.3 [X] Betano/LeBull/Bwin parsers: live-market handling (`Suspended` acceptance in `bwin_parser`, live inclusion in `lebull_parser`, `betano_parser` updates)
+        36.4 [X] Benchmarks: update `Game::new` calls with `None` link, rename `subscribe_to_game_updates` → `subscribe_to_cluster_updates`
+
+37. [X] Frontend improvements
+
+        37.1 [X] Add `LiveDiffComparisonTable` and wire into `ClusterInspector` alongside `MarketChart`/`MarketHistory`
+        37.2 [X] Platform deep-links: `ClusterInspector`/`GameCard` show `ExternalLink` to `game.link`, `ClusterTable`/`Dashboard`/`MarketGroupTable` updates
+        37.3 [X] Statistics refactor: extract `stores/statistics.ts`, simplify `useClusterStatistics`, update `StatisticsPage` and `lib/markets`
+        37.4 [X] Routing/nav: add `Alerts` to `__root.tsx` / `routeTree.ts` and `cluster` type `link` field

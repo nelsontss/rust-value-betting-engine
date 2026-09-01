@@ -6,6 +6,7 @@ use std::{
 use chrono::NaiveDateTime;
 use deunicode::deunicode;
 use strsim;
+use url::Url;
 use uuid::Uuid;
 
 use crate::domain::entities::Platform;
@@ -24,6 +25,7 @@ pub struct Game {
     platform: Platform,
     pub date: NaiveDateTime,
     markets: HashMap<MarketType, Market>,
+    link: Option<Url>,
 }
 
 struct SimilarityWeights;
@@ -45,6 +47,7 @@ impl Game {
         date: NaiveDateTime,
         platform: Platform,
         markets: Vec<Market>,
+        link: Option<Url>,
     ) -> Self {
         let mut game = Game::new(
             home_team,
@@ -54,6 +57,7 @@ impl Game {
             date,
             platform,
             markets,
+            link,
         );
 
         game.id = id.to_string();
@@ -69,6 +73,7 @@ impl Game {
         date: NaiveDateTime,
         platform: Platform,
         markets: Vec<Market>,
+        link: Option<Url>,
     ) -> Self {
         Game {
             id: Uuid::new_v4().to_string(),
@@ -82,6 +87,7 @@ impl Game {
                 .into_iter()
                 .map(|market| (MarketType::from(&market), market))
                 .collect(),
+            link,
         }
     }
 
@@ -195,6 +201,14 @@ impl Game {
 
     pub fn country(&self) -> &str {
         &self.country
+    }
+
+    pub fn link(&self) -> Option<&Url> {
+        self.link.as_ref()
+    }
+
+    pub fn link_str(&self) -> Option<String> {
+        self.link.as_ref().map(|u| u.to_string())
     }
 }
 

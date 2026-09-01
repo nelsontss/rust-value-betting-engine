@@ -23,8 +23,8 @@ fn statistics_diffs_pairs_polymarket_probs_with_other_platforms_median() {
     let diffs = cluster.live_statistics_diffs();
     let total_type = total_market_type(2.5);
 
-    let over_diff = diffs[&(total_type.clone(), Outcome::Over)];
-    let under_diff = diffs[&(total_type, Outcome::Under)];
+    let over_diff = diffs[&total_type][&Outcome::Over];
+    let under_diff = diffs[&total_type][&Outcome::Under];
 
     let poly_over = 1.0 / 2.0;
     let poly_under = 1.0 / 2.0;
@@ -91,19 +91,19 @@ fn statistics_diffs_averages_accumulated_ticks() {
 
     let means = cluster.statistics_diffs();
 
-    assert_eq!(2, cluster.diffs[&(total_type.clone(), Outcome::Over)].len());
+    assert_eq!(2, cluster.diffs[&total_type][&Outcome::Over].len());
     assert!(
-        (means[&(total_type.clone(), Outcome::Over)] - (tick1_over + tick2_over) / 2.0).abs()
+        (means[&total_type][&Outcome::Over] - (tick1_over + tick2_over) / 2.0).abs()
             < 1e-9
     );
     assert!(
-        (means[&(total_type.clone(), Outcome::Under)] - (tick1_under + tick2_under) / 2.0).abs()
+        (means[&total_type][&Outcome::Under] - (tick1_under + tick2_under) / 2.0).abs()
             < 1e-9
     );
 
     // live diff reflects the latest tick only
     let live = cluster.live_statistics_diffs();
-    assert!((live[&(total_type, Outcome::Over)] - tick2_over).abs() < 1e-9);
+    assert!((live[&total_type][&Outcome::Over] - tick2_over).abs() < 1e-9);
 }
 
 #[test]
@@ -119,9 +119,9 @@ fn from_persisted_uses_saved_mean_diffs_and_does_not_fabricate_ticks() {
         ),
     ];
 
-    let mut mean_diffs = HashMap::new();
-    mean_diffs.insert((MarketType::Moneyline, Outcome::Home), 0.05);
-    mean_diffs.insert((MarketType::Moneyline, Outcome::Away), -0.03);
+    let mut mean_diffs: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+    mean_diffs.entry(MarketType::Moneyline).or_default().insert(Outcome::Home, 0.05);
+    mean_diffs.entry(MarketType::Moneyline).or_default().insert(Outcome::Away, -0.03);
 
     let completed = FixtureCluster::from_persisted(
         "benfica-sporting".to_string(),

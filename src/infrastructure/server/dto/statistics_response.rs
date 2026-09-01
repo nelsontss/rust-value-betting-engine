@@ -25,14 +25,16 @@ impl From<&StatisticsUpdated> for StatisticsUpdatedResponse {
         let mut statistics: HashMap<String, HashMap<String, StatisticsValuesResponse>> =
             HashMap::new();
 
-        for ((market_type, outcome), values) in &update.statistics {
-            statistics
-                .entry(market_type.to_key_string())
-                .or_default()
-                .insert(
-                    format!("{:?}", outcome),
-                    StatisticsValuesResponse::from(values),
-                );
+        for (market_type, inner) in &update.statistics {
+            for (outcome, values) in inner {
+                statistics
+                    .entry(market_type.to_key_string())
+                    .or_default()
+                    .insert(
+                        format!("{:?}", outcome),
+                        StatisticsValuesResponse::from(values),
+                    );
+            }
         }
 
         StatisticsUpdatedResponse { statistics }

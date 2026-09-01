@@ -12,6 +12,7 @@ pub struct GameResponse {
     pub platform: String,
     pub date: String,
     pub markets: Vec<MarketResponse>,
+    pub link: Option<String>,
 }
 impl From<Game> for GameResponse {
     fn from(g: Game) -> Self {
@@ -24,6 +25,7 @@ impl From<Game> for GameResponse {
             platform: format!("{:?}", g.platform()),
             date: g.date.to_string(),
             markets: g.markets().values().map(|m| m.into()).collect(),
+            link: g.link().map(|u| u.to_string()),
         }
     }
 }

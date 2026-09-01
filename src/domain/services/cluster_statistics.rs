@@ -8,7 +8,7 @@ use crate::domain::{
 /// Broadcast payload with the statistics snapshot per (market_type, outcome).
 #[derive(Debug, Clone)]
 pub struct StatisticsUpdated {
-    pub statistics: HashMap<(MarketType, Outcome), StatisticsValues>,
+    pub statistics: HashMap<MarketType, HashMap<Outcome, StatisticsValues>>,
 }
 
 #[derive(Debug, Default, Clone)]

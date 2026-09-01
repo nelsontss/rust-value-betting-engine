@@ -416,6 +416,8 @@ fn from_frame_type_6_is_ping() {
         target: None,
         invocation_id: None,
         arguments: None,
+        error: None,
+        allow_reconnect: None,
     };
     let event = BwinWSEvent::from_frame(frame);
     assert!(matches!(event, Some(BwinWSEvent::Ping)));
@@ -428,6 +430,8 @@ fn from_frame_type_0_returns_none() {
         target: None,
         invocation_id: None,
         arguments: None,
+        error: None,
+        allow_reconnect: None,
     };
     assert!(BwinWSEvent::from_frame(frame).is_none());
 }

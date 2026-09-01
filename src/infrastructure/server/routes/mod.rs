@@ -1,3 +1,4 @@
+mod alerts;
 mod clusters;
 mod games;
 mod market_history;

@@ -16,7 +16,7 @@ use crate::{
 #[derive(Debug)]
 pub struct StatisticsService {
     fixture_cluster_repository: Arc<FixtureClusterRepository>,
-    historical_stats: DashMap<(MarketType, Outcome), ClusterStatistics>,
+    historical_diffs: DashMap<MarketType, HashMap<Outcome, ClusterStatistics>>,
     event_tx: broadcast::Sender<Arc<StatisticsUpdated>>,
 }
 
@@ -26,7 +26,7 @@ impl StatisticsService {
 
         StatisticsService {
             fixture_cluster_repository,
-            historical_stats: DashMap::new(),
+            historical_diffs: DashMap::new(),
             event_tx,
         }
     }
@@ -40,8 +40,10 @@ impl StatisticsService {
             .await?;
 
         for (market_type, outcome, diff) in diffs {
-            self.historical_stats
-                .entry((market_type, outcome))
+            self.historical_diffs
+                .entry(market_type)
+                .or_default()
+                .entry(outcome)
                 .or_default()
                 .add_diff(diff);
         }
@@ -49,24 +51,33 @@ impl StatisticsService {
         Ok(())
     }
 
-    pub fn get_historical_statistics(&self) -> HashMap<(MarketType, Outcome), StatisticsValues> {
-        self.historical_stats
-            .iter()
-            .map(|entry| {
-                (
-                    (entry.key().0.clone(), entry.key().1),
-                    StatisticsValues::from(entry.value()),
-                )
-            })
-            .collect()
+    pub fn get_historical_statistics(
+        &self,
+    ) -> HashMap<MarketType, HashMap<Outcome, StatisticsValues>> {
+        let mut out: HashMap<MarketType, HashMap<Outcome, StatisticsValues>> = HashMap::new();
+        for entry in self.historical_diffs.iter() {
+            let mut inner = HashMap::new();
+            for (outcome, stats) in entry.value() {
+                inner.insert(*outcome, StatisticsValues::from(stats));
+            }
+            out.insert(*entry.key(), inner);
+        }
+        out
     }
 
-    pub fn add_completed_fixture_diffs(&self, mean_diffs: HashMap<(MarketType, Outcome), f64>) {
-        for ((market_type, outcome), diff) in mean_diffs {
-            self.historical_stats
-                .entry((market_type, outcome))
-                .or_default()
-                .add_diff(diff);
+    pub fn add_completed_fixture_diffs(
+        &self,
+        mean_diffs: HashMap<MarketType, HashMap<Outcome, f64>>,
+    ) {
+        for (market_type, inner) in mean_diffs {
+            for (outcome, diff) in inner {
+                self.historical_diffs
+                    .entry(market_type)
+                    .or_default()
+                    .entry(outcome)
+                    .or_default()
+                    .add_diff(diff);
+            }
         }
 
         let statistics = self.get_historical_statistics();

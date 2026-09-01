@@ -44,6 +44,7 @@ fn game(id: &str, platform: Platform, home: f64, away: f64) -> Game {
             Odd::new(home).unwrap(),
             Odd::new(away).unwrap(),
         ))],
+    None,
     )
 }
 
@@ -64,6 +65,7 @@ fn future_game(id: &str, platform: Platform, home: f64, away: f64) -> Game {
             Odd::new(home).unwrap(),
             Odd::new(away).unwrap(),
         ))],
+    None,
     )
 }
 
@@ -84,9 +86,9 @@ async fn insert_cluster_diffs_persists_and_round_trips_into_loaded_cluster() {
 
     repo.insert_cluster(&cluster).await.unwrap();
 
-    let mut diffs = HashMap::new();
-    diffs.insert((MarketType::Moneyline, Outcome::Home), 0.05);
-    diffs.insert((MarketType::Moneyline, Outcome::Away), -0.03);
+    let mut diffs: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+    diffs.entry(MarketType::Moneyline).or_default().insert(Outcome::Home, 0.05);
+    diffs.entry(MarketType::Moneyline).or_default().insert(Outcome::Away, -0.03);
     repo.insert_cluster_diffs(&cluster.key(), &diffs)
         .await
         .unwrap();
@@ -102,15 +104,15 @@ async fn insert_cluster_diffs_upserts_same_fixture_market_outcome() {
     let cluster = FixtureCluster::new(game("g1", Platform::Betano, 2.0, 1.8));
     repo.insert_cluster(&cluster).await.unwrap();
 
-    let mut first = HashMap::new();
-    first.insert((MarketType::Moneyline, Outcome::Home), 0.10);
+    let mut first: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+    first.entry(MarketType::Moneyline).or_default().insert(Outcome::Home, 0.10);
     repo.insert_cluster_diffs(&cluster.key(), &first)
         .await
         .unwrap();
 
-    let mut second = HashMap::new();
-    second.insert((MarketType::Moneyline, Outcome::Home), 0.02);
-    second.insert((MarketType::Moneyline, Outcome::Away), -0.01);
+    let mut second: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+    second.entry(MarketType::Moneyline).or_default().insert(Outcome::Home, 0.02);
+    second.entry(MarketType::Moneyline).or_default().insert(Outcome::Away, -0.01);
     repo.insert_cluster_diffs(&cluster.key(), &second)
         .await
         .unwrap();
@@ -129,12 +131,12 @@ async fn get_all_cluster_diffs_aggregates_across_fixtures() {
     repo.insert_cluster(&c1).await.unwrap();
     repo.insert_cluster(&c2).await.unwrap();
 
-    let mut d1 = HashMap::new();
-    d1.insert((MarketType::Moneyline, Outcome::Home), 0.05);
+    let mut d1: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+    d1.entry(MarketType::Moneyline).or_default().insert(Outcome::Home, 0.05);
     repo.insert_cluster_diffs(&c1.key(), &d1).await.unwrap();
 
-    let mut d2 = HashMap::new();
-    d2.insert((MarketType::Moneyline, Outcome::Home), -0.02);
+    let mut d2: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+    d2.entry(MarketType::Moneyline).or_default().insert(Outcome::Home, -0.02);
     repo.insert_cluster_diffs(&c2.key(), &d2).await.unwrap();
 
     let all = repo.get_all_cluster_diffs().await.unwrap();

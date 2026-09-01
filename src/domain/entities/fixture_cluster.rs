@@ -20,8 +20,8 @@ pub struct FixtureCluster {
     market_type_to_game_ids: HashMap<MarketType, HashSet<String>>,
     updated_at: DateTime<Utc>,
     representative_game: Option<Game>,
-    diffs: HashMap<(MarketType, Outcome), Vec<f64>>,
-    mean_diffs: HashMap<(MarketType, Outcome), f64>,
+    diffs: HashMap<MarketType, HashMap<Outcome, Vec<f64>>>,
+    mean_diffs: HashMap<MarketType, HashMap<Outcome, f64>>,
     closed: bool,
 }
 
@@ -53,7 +53,7 @@ impl FixtureCluster {
         key: String,
         games: Vec<Game>,
         updated_at: DateTime<Utc>,
-        mean_diffs: HashMap<(MarketType, Outcome), f64>,
+        mean_diffs: HashMap<MarketType, HashMap<Outcome, f64>>,
         closed: bool,
     ) -> Self {
         let mut fixture_cluster = FixtureCluster {
@@ -130,11 +130,15 @@ impl FixtureCluster {
     }
 
     fn record_live_diffs(&mut self) {
-        for ((market_type, outcome), diff) in self.live_statistics_diffs() {
-            self.diffs
-                .entry((market_type, outcome))
-                .or_default()
-                .push(diff);
+        for (market_type, inner) in self.live_statistics_diffs() {
+            for (outcome, diff) in inner {
+                self.diffs
+                    .entry(market_type)
+                    .or_default()
+                    .entry(outcome)
+                    .or_default()
+                    .push(diff);
+            }
         }
     }
 
@@ -193,36 +197,39 @@ impl FixtureCluster {
 
     /// Diffs concluídos da fixture: as médias persistidas quando a fixture
     /// foi carregada da BD, ou a média dos ticks acumulados em memória.
-    pub fn statistics_diffs(&self) -> HashMap<(MarketType, Outcome), f64> {
+    pub fn statistics_diffs(&self) -> HashMap<MarketType, HashMap<Outcome, f64>> {
         if !self.mean_diffs.is_empty() {
             return self.mean_diffs.clone();
         } else if !self.diffs.is_empty() {
-            return self
-                .diffs
-                .iter()
-                .map(|(key, v)| {
+            let mut out: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+            for (mt, inner) in &self.diffs {
+                let mut inner_out = HashMap::new();
+                for (outcome, v) in inner {
                     let sum: f64 = v.iter().sum();
-                    (key.clone(), sum / v.len() as f64)
-                })
-                .collect();
+                    inner_out.insert(*outcome, sum / v.len() as f64);
+                }
+                out.insert(*mt, inner_out);
+            }
+            return out;
         }
 
         HashMap::new()
     }
 
-    pub fn live_statistics_diffs(&self) -> HashMap<(MarketType, Outcome), f64> {
-        self.market_type_to_game_ids
-            .iter()
-            .flat_map(|(market_type, _)| {
-                market_type
-                    .outcomes()
-                    .into_iter()
-                    .filter_map(move |outcome| {
-                        self.live_diff_for_outcome(market_type, &outcome)
-                            .map(|diff| ((market_type.clone(), outcome), diff))
-                    })
-            })
-            .collect()
+    pub fn live_statistics_diffs(&self) -> HashMap<MarketType, HashMap<Outcome, f64>> {
+        let mut map: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+        for (market_type, _) in &self.market_type_to_game_ids {
+            let mut inner = HashMap::new();
+            for outcome in market_type.outcomes() {
+                if let Some(diff) = self.live_diff_for_outcome(market_type, &outcome) {
+                    inner.insert(outcome, diff);
+                }
+            }
+            if !inner.is_empty() {
+                map.insert(*market_type, inner);
+            }
+        }
+        map
     }
 
     fn live_diff_for_outcome(&self, market_type: &MarketType, outcome: &Outcome) -> Option<f64> {

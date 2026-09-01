@@ -1,5 +1,8 @@
 use chrono::{DateTime, TimeDelta};
+use deunicode::deunicode;
+use regex::Regex;
 use serde_json::Value;
+use url::Url;
 
 use crate::domain::Game;
 use crate::domain::entities::{Market, Platform};
@@ -63,6 +66,15 @@ impl BetanoParser {
                 let date =
                     DateTime::UNIX_EPOCH.naive_utc() + TimeDelta::milliseconds(start_time_ms);
 
+                let slug_raw = deunicode(event_name).to_lowercase();
+                let slug = Regex::new(r"[^a-z0-9]+")
+                    .unwrap()
+                    .replace_all(&slug_raw, "-")
+                    .trim_matches('-')
+                    .to_string();
+                let link =
+                    Url::parse(&format!("https://www.betano.pt/odds/{slug}/{event_id}/")).ok();
+
                 let markets = match event.get("markets").and_then(|m| m.as_array()) {
                     Some(m) => m,
                     None => {
@@ -75,6 +87,7 @@ impl BetanoParser {
                             date,
                             Platform::Betano,
                             vec![],
+                            link,
                         ));
                         continue;
                     }
@@ -190,6 +203,7 @@ impl BetanoParser {
                     date,
                     Platform::Betano,
                     parsed_markets,
+                    link,
                 ));
             }
         }

@@ -1,6 +1,7 @@
 use chrono::{DateTime, TimeDelta, Utc};
 use serde_json::Value;
 use std::collections::HashMap;
+use url::Url;
 
 use crate::domain::Game;
 use crate::domain::entities::{Market, Platform};
@@ -56,6 +57,11 @@ impl LeBullParser {
 
                 let date = parse_date(event);
 
+                let link = Url::parse(&format!(
+                    "https://www.lebull.pt/apostas-desportivas?page=/event/{event_id}"
+                ))
+                .ok();
+
                 let stake_types = match event.get("stakeTypes").and_then(|m| m.as_array()) {
                     Some(m) => m,
                     None => {
@@ -68,6 +74,7 @@ impl LeBullParser {
                             date,
                             Platform::LeBull,
                             vec![],
+                            link.clone(),
                         );
                         if is_today_or_tomorrow(&game) {
                             games.push(game);
@@ -104,6 +111,7 @@ impl LeBullParser {
                     date,
                     Platform::LeBull,
                     markets,
+                    link,
                 );
                 if is_today_or_tomorrow(&game) {
                     games.push(game);

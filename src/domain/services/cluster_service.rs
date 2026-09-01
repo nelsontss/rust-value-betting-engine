@@ -101,7 +101,8 @@ impl ClusterService {
                 return;
             }
 
-            self.pending_persists.insert(cluster.key().to_string(), cluster.clone());
+            self.pending_persists
+                .insert(cluster.key().to_string(), cluster.clone());
             let repo = Arc::clone(repo);
             let key = cluster.key().to_string();
             let pending = Arc::new(self.pending_persists.clone());
@@ -118,7 +119,7 @@ impl ClusterService {
     pub fn persist_cluster_diffs(
         &self,
         key: String,
-        mean_diffs: HashMap<(MarketType, Outcome), f64>,
+        mean_diffs: HashMap<MarketType, HashMap<Outcome, f64>>,
     ) {
         if let Some(repo) = &self.fixture_cluster_repository {
             if tokio::runtime::Handle::try_current().is_err() {
@@ -325,8 +326,9 @@ impl ClusterService {
         if let Some(cluster_key_ref) = self.game_id_to_fixture_cluster_key.get(game_id)
             && let Some(game_date_ref) = self.cluster_id_to_date.get(cluster_key_ref.value())
             && let Some(clusters_on_date_ref) = self.clusters.get_mut(game_date_ref.value())
-            && let Some(mut cluster_ref) =
-                clusters_on_date_ref.value().get_mut(cluster_key_ref.value())
+            && let Some(mut cluster_ref) = clusters_on_date_ref
+                .value()
+                .get_mut(cluster_key_ref.value())
         {
             let cluster = cluster_ref.value_mut();
             if cluster.get_game(game_id).is_some() {
@@ -386,7 +388,7 @@ impl ClusterService {
         Err(ClusterNotFound)
     }
 
-    pub fn subscribe_to_game_updates(&self) -> Receiver<Arc<FixtureCluster>> {
+    pub fn subscribe_to_cluster_updates(&self) -> Receiver<Arc<FixtureCluster>> {
         self.event_tx.subscribe()
     }
 

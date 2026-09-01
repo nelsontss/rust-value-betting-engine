@@ -103,9 +103,12 @@ impl BwinConnector {
         ))
         .map_err(|e| format!("WS handshake error: {e}"))?;
 
-        let frame = BwinWSEvent::subscribe(topics.clone());
-        let subscribe_msg = serde_json::to_string(&frame).unwrap() + "\x1e";
         let mut subscribed = false;
+        let subscribe_chunks: Vec<Vec<String>> = topics.chunks(40).map(|c| c.to_vec()).collect();
+        let subscribe_msgs: Vec<String> = subscribe_chunks
+            .into_iter()
+            .map(|chunk| serde_json::to_string(&BwinWSEvent::subscribe(chunk)).unwrap() + "\x1e")
+            .collect();
 
         while let Ok(message) = ws.read() {
             match message {
@@ -116,7 +119,9 @@ impl BwinConnector {
                             continue;
                         }
                         if part == "{}" && !subscribed {
-                            ws.send(Message::Text(subscribe_msg.clone().into())).ok();
+                            for msg in &subscribe_msgs {
+                                ws.send(Message::Text(msg.clone().into())).ok();
+                            }
                             subscribed = true;
                             continue;
                         }
@@ -210,6 +215,9 @@ impl BwinConnector {
                 println!("bwin connected: {}", connection_id);
             }
             BwinWSEvent::Subscribe { .. } => {}
+            BwinWSEvent::Close { error, allow_reconnect } => {
+                eprintln!("[bwin] close frame: {} allowReconnect={}", error, allow_reconnect);
+            }
         }
     }
 
