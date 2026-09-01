@@ -5,11 +5,18 @@ export interface Alert {
   payload: MarketClusterDiffDivergencyPayload
 }
 
+export interface ConvergencyEvent {
+  id: string
+  type: "AlertConvergency"
+  timestamp: string
+  payload: AlertConvergencyPayload
+}
+
 export interface MarketClusterDiffDivergencyPayload {
   cluster_key: string
   cluster_mean_diff: number
-  mean_divergency: number
-  median_divergency: number
+  mean_divergency?: number
+  median_divergency?: number
   market_type: string
   outcome: string
   statistics: {
@@ -23,8 +30,21 @@ export interface MarketClusterDiffDivergencyPayload {
   }
 }
 
-export function alertKey(a: Alert): string {
+export interface AlertConvergencyPayload {
+  cluster_key: string
+  cluster_mean_diff: number
+  market_type: string
+  outcome: string
+  initial_polymarket_impl_prob: number
+  current_polymarket_impl_prob: number
+}
+
+export function alertKey(a: { payload: { cluster_key: string; market_type: string; outcome: string } }): string {
   return `${a.payload.cluster_key}_${a.payload.market_type}_${a.payload.outcome}`
+}
+
+export function convergencyKey(p: AlertConvergencyPayload): string {
+  return `${p.cluster_key}_${p.market_type}_${p.outcome}`
 }
 
 export function marketTypeToGroupKey(marketType: string): string {
