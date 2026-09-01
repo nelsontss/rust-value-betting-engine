@@ -180,6 +180,41 @@ export function MarketChart({ data, targetMarket, games }: MarketChartProps) {
     })
   }, [data, targetMarket, allLineKeys, intervalCutoff])
 
+  const yDomain = useMemo<[number, number]>(() => {
+    const visibleKeys =
+      hiddenLines.size > 0 ? allLineKeys.filter((k) => !hiddenLines.has(k)) : allLineKeys
+    const findExtents = (keys: string[]) => {
+      let lo = Infinity
+      let hi = -Infinity
+      for (const row of chartData) {
+        for (const k of keys) {
+          const v = row[k]
+          if (typeof v === "number" && Number.isFinite(v)) {
+            if (v < lo) lo = v
+            if (v > hi) hi = v
+          }
+        }
+      }
+      return { lo, hi }
+    }
+    let { lo: min, hi: max } = findExtents(visibleKeys)
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      const fallback = findExtents(allLineKeys)
+      min = fallback.lo
+      max = fallback.hi
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return [1.01, 5]
+    if (min === max) {
+      const pad = Math.max(Math.abs(min) * 0.06, 0.1)
+      return [Math.max(1.01, min - pad), max + pad]
+    }
+    const pad = (max - min) * 0.14
+    const lo = Math.max(1.01, min - pad)
+    const hi = max + pad
+    if (hi - lo < 0.05) return [Math.max(1.01, lo - 0.05), hi + 0.05]
+    return [lo, hi]
+  }, [chartData, hiddenLines, allLineKeys])
+
   if (chartData.length === 0) {
     const hasAnyData = data.some((point) => {
       if ("line" in targetMarket && "line" in point.market) {
@@ -222,12 +257,13 @@ export function MarketChart({ data, targetMarket, games }: MarketChartProps) {
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis dataKey="timestamp" tickCount={5} height={30} tick={{ fontSize: 11 }} />
           <YAxis
-            scale="log"
-            domain={["auto", "auto"]}
-            allowDataOverflow
+            type="number"
+            domain={yDomain}
+            allowDecimals
+            allowDataOverflow={false}
             tickFormatter={(v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2))}
             tick={{ fontSize: 11 }}
-            width={45}
+            width={52}
           />
           <Tooltip
             formatter={(value) => (typeof value === "number" ? value.toFixed(2) : String(value ?? ""))}

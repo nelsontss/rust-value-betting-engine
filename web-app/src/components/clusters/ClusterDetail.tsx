@@ -3,6 +3,7 @@ import type { Cluster } from "@/types/cluster"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MarketGroupTable } from "./MarketGroupTable"
 import { MarketChart } from "./MarketChart"
+import { LiveDiffComparisonTable } from "./LiveDiffComparisonTable"
 import { groupMarkets } from "@/lib/markets"
 import { useClusterMarketHistory } from "@/hooks/useClusterMarketHistory"
 
@@ -89,6 +90,7 @@ export function ClusterDetail({ cluster }: ClusterDetailProps) {
             )}
           </CardContent>
         </Card>
+        <LiveDiffComparisonTable cluster={cluster} filterMarket={targetMarket} />
       </div>
     </div>
   )

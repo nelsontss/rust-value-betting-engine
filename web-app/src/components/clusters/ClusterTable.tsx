@@ -1,6 +1,8 @@
+import { useEffect, useRef } from "react"
 import type { Cluster, Game } from "@/types/cluster"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { ExternalLink } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -9,7 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { cn } from "@/lib/utils"
 
 interface ClusterTableProps {
   clusters: Cluster[]
@@ -51,6 +52,11 @@ function formatDate(ts: number): string {
 
 export function ClusterTable({ clusters, selectedId, onSelect }: ClusterTableProps) {
   const rows = sortNextFirst(clusters)
+  const selectedRef = useRef<HTMLTableRowElement | null>(null)
+
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [selectedId])
 
   return (
     <ScrollArea className="h-full">
@@ -60,12 +66,6 @@ export function ClusterTable({ clusters, selectedId, onSelect }: ClusterTablePro
             <TableHead className="h-8 text-[11px] uppercase tracking-wide">
               Game
             </TableHead>
-            <TableHead className="h-8 text-[11px] uppercase tracking-wide w-[132px]">
-              Date
-            </TableHead>
-            <TableHead className="h-8 text-[11px] uppercase tracking-wide w-[150px]">
-              League
-            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -74,49 +74,62 @@ export function ClusterTable({ clusters, selectedId, onSelect }: ClusterTablePro
             const name = rep ? `${rep.home_team} vs ${rep.away_team}` : cluster.id
             const league = rep?.competition?.trim() || "—"
             const time = parseDate(rep?.date ?? "")
-            const isPast = time !== MAX_SAFE_DATE && time < Date.now()
+            const isLive = time !== MAX_SAFE_DATE && time < Date.now() && time > Date.now() - 3 * 60 * 60 * 1000
             const selected = cluster.id === selectedId
-            const platforms = [...new Set(cluster.games.map((g) => g.platform))]
+            const platformLinks = new Map<string, string | null>()
+            cluster.games.forEach((g) => {
+              if (!platformLinks.has(g.platform) && g.link) platformLinks.set(g.platform, g.link)
+              else if (!platformLinks.has(g.platform)) platformLinks.set(g.platform, null)
+            })
+            const platforms = [...platformLinks.keys()]
             return (
               <TableRow
                 key={cluster.id}
+                ref={selected ? selectedRef : undefined}
                 data-state={selected ? "selected" : undefined}
-                className="cursor-pointer align-top"
+                className={`cursor-pointer align-top ${selected ? "bg-accent border-l-2 border-l-primary" : ""}`}
                 onClick={() => onSelect(cluster.id)}
               >
-                <TableCell className={cn(isPast && "opacity-60")}>
-                  <div className="font-medium line-clamp-3 leading-snug">
+                <TableCell className="relative">
+                  {isLive && (
+                    <span className="absolute bottom-1.5 right-1.5 bg-red-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded leading-none">
+                      LIVE
+                    </span>
+                  )}
+                  <div className="font-medium line-clamp-2 leading-snug pr-8">
                     {name}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground line-clamp-1 leading-snug">
+                    {league} · {formatDate(time)}
                   </div>
                   {platforms.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {platforms.map((p) => (
-                        <Badge
-                          key={p}
-                          variant="secondary"
-                          className="text-[10px] h-4 px-1.5 font-mono"
-                        >
-                          {p}
-                        </Badge>
-                      ))}
+                      {platforms.map((p) => {
+                        const link = platformLinks.get(p)
+                        return (
+                          <span key={p} className="inline-flex items-center gap-0.5">
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] h-4 px-1.5 font-mono"
+                            >
+                              {p}
+                            </Badge>
+                            {link && (
+                              <a
+                                href={link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                              >
+                                <ExternalLink className="size-3" />
+                              </a>
+                            )}
+                          </span>
+                        )
+                      })}
                     </div>
                   )}
-                </TableCell>
-                <TableCell
-                  className={cn(
-                    "whitespace-nowrap text-xs",
-                    isPast && "opacity-60",
-                  )}
-                >
-                  {formatDate(time)}
-                </TableCell>
-                <TableCell
-                  className={cn(
-                    "text-muted-foreground text-xs line-clamp-2 leading-snug",
-                    isPast && "opacity-60",
-                  )}
-                >
-                  {league}
                 </TableCell>
               </TableRow>
             )

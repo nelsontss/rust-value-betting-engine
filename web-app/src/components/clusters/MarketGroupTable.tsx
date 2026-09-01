@@ -1,6 +1,7 @@
 import type { Market } from "@/types/cluster"
 import type { MarketGroup } from "@/lib/markets"
 import { Badge } from "@/components/ui/badge"
+import { ExternalLink } from "lucide-react"
 
 interface MarketGroupTableProps {
   group: MarketGroup
@@ -34,6 +35,18 @@ export function MarketGroupTable({ group, compact }: MarketGroupTableProps) {
           <Badge variant="outline" className="text-[10px] h-4 px-1 font-mono">
             {item.platform}
           </Badge>
+          {item.link && (
+            <a
+              href={item.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+              aria-label={`Open ${item.platform}`}
+            >
+              <ExternalLink className="size-3" />
+            </a>
+          )}
           {getValues(item.market).map((v, i) => (
             <OddsValue key={i} value={v} className={colClass} />
           ))}

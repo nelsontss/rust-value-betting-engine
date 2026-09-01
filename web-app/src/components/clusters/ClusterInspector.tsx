@@ -2,7 +2,9 @@ import type { Cluster } from "@/types/cluster"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { MarketGroupTable } from "./MarketGroupTable"
+import { ExternalLink } from "lucide-react"
 import { MarketChart } from "./MarketChart"
+import { LiveDiffComparisonTable } from "./LiveDiffComparisonTable"
 import { groupMarkets } from "@/lib/markets"
 import { useClusterMarketHistory } from "@/hooks/useClusterMarketHistory"
 
@@ -45,7 +47,12 @@ export function ClusterInspector({
     useClusterMarketHistory(selectedGames, targetMarket?.type ?? "")
 
   const rep = cluster.representative_game
-  const platforms = [...new Set(cluster.games.map((g) => g.platform))]
+  const platformLinks = new Map<string, string | null>()
+  cluster.games.forEach((g) => {
+    if (!platformLinks.has(g.platform) && g.link) platformLinks.set(g.platform, g.link)
+    else if (!platformLinks.has(g.platform)) platformLinks.set(g.platform, null)
+  })
+  const platforms = [...platformLinks.keys()]
   const multiPlatform = allGroups.filter(
     (g) => new Set(g.items.map((i) => i.platform)).size >= 2,
   )
@@ -75,11 +82,26 @@ export function ClusterInspector({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {platforms.map((p) => (
-            <Badge key={p} variant="secondary" className="text-xs">
-              {p}
-            </Badge>
-          ))}
+          {platforms.map((p) => {
+            const link = platformLinks.get(p)
+            return (
+              <span key={p} className="inline-flex items-center gap-0.5">
+                <Badge variant="secondary" className="text-xs">
+                  {p}
+                </Badge>
+                {link && (
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                )}
+              </span>
+            )
+          })}
         </div>
       </div>
 
@@ -120,7 +142,7 @@ export function ClusterInspector({
           })}
         </div>
 
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Market History</CardTitle>
@@ -145,6 +167,7 @@ export function ClusterInspector({
               )}
             </CardContent>
           </Card>
+          <LiveDiffComparisonTable cluster={cluster} filterMarket={targetMarket} />
         </div>
       </div>
     </div>

@@ -50,8 +50,10 @@ function OutcomeTable({
           <TableHead>Outcome</TableHead>
           <TableHead className="text-right">Mean diff</TableHead>
           <TableHead className="text-right">Median diff</TableHead>
+          <TableHead className="text-right">p05</TableHead>
           <TableHead className="text-right">p25</TableHead>
           <TableHead className="text-right">p75</TableHead>
+          <TableHead className="text-right">p95</TableHead>
           <TableHead className="text-right">Samples</TableHead>
         </TableRow>
       </TableHeader>
@@ -81,10 +83,16 @@ function OutcomeRow({
         <DiffCell value={values.median_diff} />
       </TableCell>
       <TableCell className="text-right">
+        <DiffCell value={values.p05_diff} />
+      </TableCell>
+      <TableCell className="text-right">
         <DiffCell value={values.p25_diff} />
       </TableCell>
       <TableCell className="text-right">
         <DiffCell value={values.p75_diff} />
+      </TableCell>
+      <TableCell className="text-right">
+        <DiffCell value={values.p95_diff} />
       </TableCell>
       <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
         {values.samples}

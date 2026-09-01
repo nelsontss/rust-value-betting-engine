@@ -2,6 +2,7 @@ export interface Cluster {
   id: string
   games: Game[]
   representative_game: Game | null
+  live_diffs: Record<string, Record<string, number>>
   updated_at: string
 }
 
@@ -14,6 +15,7 @@ export interface Game {
   platform: string
   date: string
   markets: Market[]
+  link: string | null
 }
 
 export type Market =

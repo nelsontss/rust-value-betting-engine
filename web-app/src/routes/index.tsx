@@ -7,7 +7,7 @@ export const indexRoute = createRoute({
   path: "/",
   validateSearch: (search: Record<string, unknown>) => ({
     ...(typeof search.cluster === "string" && search.cluster !== ""
-      ? { cluster: search.cluster }
+      ? { cluster: decodeURIComponent(search.cluster.replace(/\+/g, " ")) }
       : {}),
     ...(typeof search.market === "string" && search.market !== ""
       ? { market: search.market }

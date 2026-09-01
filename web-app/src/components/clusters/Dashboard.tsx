@@ -1,4 +1,5 @@
-import { useClusters, useClusterSubscription } from "@/hooks/useClusters"
+import { useRef } from "react"
+import { useClusters, useCluster, useClusterSubscription } from "@/hooks/useClusters"
 import { ClusterTable } from "./ClusterTable"
 import { ClusterInspector } from "./ClusterInspector"
 
@@ -16,6 +17,8 @@ export function Dashboard({
   onSelectMarket,
 }: DashboardProps) {
   const { data: clusters, isLoading, error } = useClusters()
+  const { data: fetchedCluster } = useCluster(clusterId || null)
+  const fallbackIdRef = useRef<string | null>(null)
 
   useClusterSubscription()
 
@@ -36,7 +39,17 @@ export function Dashboard({
   }
 
   const list = clusters ?? []
-  const selected = list.find((c) => c.id === clusterId) ?? list[0] ?? null
+  const normalizedId = clusterId.trim().toLowerCase()
+  if (!normalizedId && list.length > 0 && fallbackIdRef.current == null) {
+    fallbackIdRef.current = list[0].id
+  }
+  if (normalizedId) fallbackIdRef.current = null
+  const effectiveId = normalizedId || fallbackIdRef.current || ""
+  const selected =
+    list.find((c) => c.id.toLowerCase() === effectiveId.toLowerCase()) ??
+    list.find((c) => c.id === effectiveId) ??
+    fetchedCluster ??
+    null
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -50,7 +63,7 @@ export function Dashboard({
       </header>
 
       <div className="flex flex-1 min-h-0">
-        <aside className="flex-1 min-w-0 border-r min-h-0">
+        <aside className="w-[300px] shrink-0 border-r min-h-0">
           <ClusterTable
             clusters={list}
             selectedId={selected?.id ?? null}

@@ -1,6 +1,7 @@
 import type { Game } from "@/types/cluster"
 import { Badge } from "@/components/ui/badge"
 import { MarketRow } from "./MarketRow"
+import { ExternalLink } from "lucide-react"
 
 interface GameCardProps {
   game: Game
@@ -17,12 +18,26 @@ export function GameCard({ game }: GameCardProps) {
     <div className="rounded-lg border p-3 space-y-2 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">{game.competition}</span>
-        <Badge
-          variant="outline"
-          className={platformColors[game.platform] ?? ""}
-        >
-          {game.platform}
-        </Badge>
+        <span className="flex items-center gap-1">
+          <Badge
+            variant="outline"
+            className={platformColors[game.platform] ?? ""}
+          >
+            {game.platform}
+          </Badge>
+          {game.link && (
+            <a
+              href={game.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+              aria-label={`Open ${game.platform} game`}
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+          )}
+        </span>
       </div>
 
       <div className="text-sm font-medium text-center">

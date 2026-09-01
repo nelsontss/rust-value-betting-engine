@@ -3,6 +3,7 @@ import type { Game, Market } from "@/types/cluster"
 export interface MarketGroupItem {
   platform: string
   gameId: string
+  link: string | null
   market: Market
 }
 
@@ -10,6 +11,20 @@ export interface MarketGroup {
   key: string
   label: string
   items: MarketGroupItem[]
+}
+
+const MARKET_ORDER: Record<string, number> = {
+  MatchResult: 0,
+  Moneyline: 1,
+  DoubleChance: 2,
+  Total: 3,
+  Handicap: 4,
+  AsianHandicap: 5,
+}
+
+function marketTypeOrder(key: string): number {
+  const type = key.split("@")[0]
+  return MARKET_ORDER[type] ?? 99
 }
 
 export function groupMarkets(games: Game[]): MarketGroup[] {
@@ -22,10 +37,13 @@ export function groupMarkets(games: Game[]): MarketGroup[] {
         group = { key, label: marketLabel(market), items: [] }
         map.set(key, group)
       }
-      group.items.push({ platform: game.platform, gameId: game.id, market })
+      group.items.push({ platform: game.platform, gameId: game.id, link: game.link, market })
     }
   }
-  return [...map.values()]
+  return [...map.values()].sort((a, b) => {
+    const o = marketTypeOrder(a.key) - marketTypeOrder(b.key)
+    return o !== 0 ? o : a.key.localeCompare(b.key)
+  })
 }
 
 function marketKey(market: Market): string {
