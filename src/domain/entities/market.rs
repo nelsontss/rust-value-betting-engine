@@ -1,3 +1,4 @@
+use num_traits::ToPrimitive as _;
 use serde::Serialize;
 
 use crate::domain::{
@@ -141,6 +142,8 @@ impl Market {
                 self.odd_for_outcome(outcome)
                     .expect("Outcome not in market")
                     .get_implied_probability()
+                    .to_f64()
+                    .unwrap_or(0.0)
             })
             .sum()
     }

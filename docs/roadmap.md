@@ -363,3 +363,17 @@
         37.2 [X] Platform deep-links: `ClusterInspector`/`GameCard` show `ExternalLink` to `game.link`, `ClusterTable`/`Dashboard`/`MarketGroupTable` updates
         37.3 [X] Statistics refactor: extract `stores/statistics.ts`, simplify `useClusterStatistics`, update `StatisticsPage` and `lib/markets`
         37.4 [X] Routing/nav: add `Alerts` to `__root.tsx` / `routeTree.ts` and `cluster` type `link` field
+
+38. [X] Best-ask executable pricing and dual YES/NO diffs
+
+        38.1 [X] Switch display price to executable `best_ask` (matches Polymarket site): `derive_display_price_from_levels` returns `best_ask`, fallback to raw price (`polymarket_connector.rs`)
+        38.2 [X] Extend `Odd` with `impl_prob_derived_from_no: Option<Decimal>`: `new_from_prob(prob, no_prob)` stores `1 − no_prob`; `get_implied_probability()` now returns `Decimal` (`odd.rs`)
+        38.3 [X] Build polymarket odds from both token prices: `price_at(m, index, index_no)` so YES odds carry the complement token's ask (and vice-versa) for match result, double chance, totals (Over=YES/Under=NO) and asian handicap
+        38.4 [X] Dual diff per outcome: `live_diff_for_outcome` returns `(diff_yes, diff_no)` where `diff_no = (1 − ask_no) − median`; identity `diff_no = diff_yes − overround` (conservative vs yes-quantiles)
+        38.5 [X] Alert trigger uses both diffs: fire when `diff < p05 || diff_no > p95`; skip only when both diffs are zero (`alert_service.rs`)
+        38.6 [X] Add `AlertConvergency` event + `MonitorObject` (5-min monitor per cluster/market/outcome) emitting repeated convergence alerts with initial vs current polymarket implied prob; convergence checked with the same condition as the trigger (`diff >= p05 && diff_no <= p95`)
+        38.7 [X] Expose `AlertConvergencyPayload` via untagged `AlertPayloadResponse` and SSE `/alerts`
+        38.8 [X] `fetch_events` resilience: 30s timeout, connect timeout, 3 retries with backoff on timeout/decode failures, partial results kept
+        38.9 [ ] Persist both diff components and compute separate `p05_no/p95_no` quantiles (option B — only if NO signals prove too rare under the conservative yes-quantile thresholds)
+        38.10 [ ] Re-enable minimum sample guard (`samples < 20`) for divergency alerts
+        38.11 [ ] Validate `impl_prob_no ∈ (0,1)` in `Odd::new_from_prob` (guard against degenerate books)

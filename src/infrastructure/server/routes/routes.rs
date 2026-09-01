@@ -11,7 +11,7 @@ use crate::{
             statistics_service::StatisticsService,
         },
     },
-    infrastructure::server::routes::{alerts, clusters, games, market_history, platforms, statistics},
+    infrastructure::server::routes::{alerts, clusters, debug, games, market_history, platforms, statistics},
 };
 
 pub struct AppState {
@@ -42,6 +42,7 @@ pub fn build_router(app_state: Arc<AppState>) -> Router {
         .route("/statistics", get(statistics::sse_get))
         .route("/alerts", get(alerts::sse_get))
         .route("/sse/alerts", get(alerts::sse_get))
+        .route("/debug/memory", get(debug::memory))
         .layer(cors)
         .with_state(app_state)
 }

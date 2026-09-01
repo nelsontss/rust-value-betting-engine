@@ -87,14 +87,14 @@ struct WirePriceChange {
 }
 
 #[derive(Debug, Deserialize)]
-struct WirePriceEntry {
+pub(crate) struct WirePriceEntry {
     #[serde(rename = "asset_id")]
-    asset_id: U256,
-    price: Decimal,
+    pub(crate) asset_id: U256,
+    pub(crate) price: Decimal,
     #[serde(rename = "best_bid")]
-    best_bid: Decimal,
+    pub(crate) best_bid: Decimal,
     #[serde(rename = "best_ask")]
-    best_ask: Decimal,
+    pub(crate) best_ask: Decimal,
 }
 
 #[derive(Debug, Deserialize)]
@@ -672,7 +672,8 @@ impl PolymarketConnector {
         let host = gamma.host();
         let client = reqwest::Client::builder()
             .user_agent("Mozilla/5.0")
-            .timeout(Duration::from_secs(15))
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
             .build()?;
         let end_date_min = (Utc::now() - Duration::from_mins(200)).format("%Y-%m-%dT%H:%M:%SZ");
         let end_date_max = (Utc::now() + Duration::from_hours(48)).format("%Y-%m-%dT%H:%M:%SZ");
@@ -688,23 +689,77 @@ impl PolymarketConnector {
             if let Some(cursor) = &after_cursor {
                 url.push_str(&format!("&after_cursor={cursor}"));
             }
-            let resp = match client.get(&url).send().await {
-                Ok(r) => r,
-                Err(e) => {
-                    warn!(?e, "fetch_events request failed");
-                    break;
+            let mut page: Option<GammaKeysetResponse> = None;
+            for attempt in 0..3 {
+                match client.get(&url).send().await {
+                    Ok(resp) => {
+                        if !resp.status().is_success() {
+                            warn!(status = %resp.status(), attempt = attempt + 1, "fetch_events non-success");
+                            if attempt == 2 {
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_secs(1 + attempt as u64 * 2)).await;
+                            continue;
+                        }
+                        match resp.json::<GammaKeysetResponse>().await {
+                            Ok(p) => {
+                                page = Some(p);
+                                break;
+                            }
+                            Err(e) => {
+                                let is_timeout = e.to_string().contains("TimedOut")
+                                    || e.to_string().contains("timeout");
+                                warn!(
+                                    ?e,
+                                    attempt = attempt + 1,
+                                    is_timeout,
+                                    "fetch_events decode failed"
+                                );
+                                if attempt == 2 {
+                                    break;
+                                }
+                                let backoff = if is_timeout {
+                                    2 + attempt as u64 * 3
+                                } else {
+                                    1 + attempt as u64
+                                };
+                                tokio::time::sleep(Duration::from_secs(backoff)).await;
+                                continue;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let is_timeout =
+                            e.to_string().contains("TimedOut") || e.to_string().contains("timeout");
+                        warn!(
+                            ?e,
+                            attempt = attempt + 1,
+                            is_timeout,
+                            "fetch_events request failed"
+                        );
+                        if attempt == 2 {
+                            break;
+                        }
+                        let backoff = if is_timeout {
+                            2 + attempt as u64 * 3
+                        } else {
+                            1 + attempt as u64
+                        };
+                        tokio::time::sleep(Duration::from_secs(backoff)).await;
+                        continue;
+                    }
                 }
-            };
-            if !resp.status().is_success() {
-                warn!(status = %resp.status(), "fetch_events non-success, stopping pagination");
-                break;
             }
-            let page: GammaKeysetResponse = match resp.json().await {
-                Ok(p) => p,
-                Err(e) => {
-                    warn!(?e, "fetch_events decode failed");
-                    break;
+            let Some(page) = page else {
+                if events.is_empty() {
+                    warn!("fetch_events giving up after retries, returning empty");
+                } else {
+                    warn!(
+                        "fetch_events page failed after retries, returning partial {} events",
+                        events.len()
+                    );
                 }
+                break;
             };
             let is_last = page.next_cursor.is_none();
             events.extend(page.events);
@@ -962,27 +1017,36 @@ fn parse_teams(event: &GammaEvent) -> Option<(String, String)> {
     Some((home.to_string(), away.to_string()))
 }
 
-fn derive_display_price(entry: &WirePriceEntry) -> Decimal {
-    let spread = entry.best_ask - entry.best_bid;
-    let threshold = Decimal::try_from("0.10").unwrap_or_default();
-    let two = Decimal::try_from("2").unwrap_or(Decimal::ONE);
-    if spread <= threshold && !spread.is_sign_negative() {
-        (entry.best_bid + entry.best_ask) / two
+pub fn derive_display_price_from_levels(
+    _best_bid: Decimal,
+    best_ask: Decimal,
+    price: Decimal,
+) -> Decimal {
+    if best_ask != Decimal::ZERO {
+        best_ask
     } else {
-        entry.price
+        price
     }
 }
 
-fn prob_to_odd(prob: f64) -> Option<Odd> {
+pub(crate) fn derive_display_price(entry: &WirePriceEntry) -> Decimal {
+    derive_display_price_from_levels(entry.best_bid, entry.best_ask, entry.price)
+}
+
+pub fn prob_to_odd(prob: f64, no_prob: f64) -> Option<Odd> {
     if prob <= 0.0 || prob > 1.0 {
         return None;
     }
     let prob = Decimal::from_f64(prob)?;
-    Odd::new_from_prob(prob).ok()
+    let no_prob = Decimal::from_f64(no_prob)?;
+    Odd::new_from_prob(prob, no_prob).ok()
 }
 
-fn price_at(m: &Market, index: usize) -> Option<Odd> {
-    prob_to_odd(m.outcome_prices.as_ref()?.get(index)?.to_f64()?)
+fn price_at(m: &Market, index: usize, index_no: usize) -> Option<Odd> {
+    prob_to_odd(
+        m.outcome_prices.as_ref()?.get(index)?.to_f64()?,
+        m.outcome_prices.as_ref()?.get(index_no)?.to_f64()?,
+    )
 }
 
 fn market_line(m: &Market) -> f32 {
@@ -1016,7 +1080,7 @@ fn match_result_market(
 
     for market in markets {
         let title = market.group_item_title.as_deref()?;
-        let odd = price_at(market, 0)?;
+        let odd = price_at(market, 0, 1)?;
         match classify_binary_market(title, home_team, away_team) {
             "home" => home = Some(odd),
             "draw" => draw = Some(odd),
@@ -1038,7 +1102,7 @@ fn double_chance_market(markets: &[&Market]) -> Option<domain::Market> {
 
     for market in markets {
         let title = market.group_item_title.as_deref()?.to_lowercase();
-        let odd = price_at(market, 0)?;
+        let odd = price_at(market, 0, 1)?;
         if title.contains("1x") || (title.contains("home") && title.contains("draw")) {
             home_or_draw = Some(odd);
         } else if title.contains("12") || (title.contains("home") && title.contains("away")) {
@@ -1060,8 +1124,8 @@ fn total_market(market: &Market) -> Option<domain::Market> {
     Some(domain::Market::Total(TotalMarket::new(
         market.id.clone(),
         Line(market_line(market)),
-        price_at(market, 0)?,
-        price_at(market, 1)?,
+        price_at(market, 0, 1)?,
+        price_at(market, 1, 0)?,
     )))
 }
 
@@ -1081,14 +1145,14 @@ fn asian_handicap_market(
         "home" => Some(domain::Market::AsianHandicap(AsianHandicapMarket::new(
             market.id.clone(),
             Line(line),
-            price_at(market, 0)?,
-            price_at(market, 1)?,
+            price_at(market, 0, 1)?,
+            price_at(market, 1, 0)?,
         ))),
         "away" => Some(domain::Market::AsianHandicap(AsianHandicapMarket::new(
             market.id.clone(),
             Line(-line),
-            price_at(market, 1)?,
-            price_at(market, 0)?,
+            price_at(market, 1, 0)?,
+            price_at(market, 0, 1)?,
         ))),
         _ => None,
     }

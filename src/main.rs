@@ -18,10 +18,30 @@ use rust_value_betting_engine::{
     },
 };
 
+#[cfg(feature = "heap-profiling")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "heap-profiling")]
+    let _profiler = dhat::Profiler::new_heap();
+
     let _ = dotenvy::dotenv();
 
+    #[cfg(feature = "tokio-console")]
+    {
+        use tracing_subscriber::prelude::*;
+        let console_layer = console_subscriber::ConsoleLayer::builder()
+            .with_default_env()
+            .spawn();
+        tracing_subscriber::registry()
+            .with(console_layer)
+            .with(tracing_subscriber::fmt::layer())
+            .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+            .init();
+    }
+    #[cfg(not(feature = "tokio-console"))]
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
@@ -92,5 +112,7 @@ async fn main() {
     server.abort();
     app_state.cluster_service.flush_pending_persists().await;
     tracing::info!("shutdown complete");
+    #[cfg(feature = "heap-profiling")]
+    drop(_profiler);
     std::process::exit(0);
 }

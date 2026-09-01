@@ -18,7 +18,7 @@ impl From<&Arc<FixtureCluster>> for ClusterResponse {
     fn from(c: &Arc<FixtureCluster>) -> Self {
         let mut live_diffs: HashMap<String, HashMap<String, f64>> = HashMap::new();
         for (mt, inner) in c.live_statistics_diffs() {
-            for (out, diff) in inner {
+            for (out, (diff, _)) in inner {
                 live_diffs
                     .entry(mt.to_key_string())
                     .or_default()

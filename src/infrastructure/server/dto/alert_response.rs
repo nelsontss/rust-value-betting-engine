@@ -1,6 +1,8 @@
 use serde::Serialize;
 
-use crate::domain::services::alert_service::{AlertEvent, MarketClusterDiffDivergencyPayload};
+use crate::domain::services::alert_service::{
+    AlertConvergencyPayload, AlertEvent, MarketClusterDiffDivergencyPayload,
+};
 
 #[derive(Serialize)]
 pub struct AlertResponse {
@@ -12,6 +14,7 @@ pub struct AlertResponse {
 #[serde(untagged)]
 pub enum AlertPayloadResponse {
     MarketClusterDiffDivergency(MarketClusterDiffDivergencyResponse),
+    AlertConvergency(AlertConvergencyResponse),
 }
 
 #[derive(Serialize)]
@@ -21,6 +24,16 @@ pub struct MarketClusterDiffDivergencyResponse {
     pub market_type: String,
     pub outcome: String,
     pub statistics: StatisticsValuesResponse,
+}
+
+#[derive(Serialize)]
+pub struct AlertConvergencyResponse {
+    pub cluster_key: String,
+    pub cluster_mean_diff: f64,
+    pub market_type: String,
+    pub outcome: String,
+    pub initial_polymarket_impl_prob: f64,
+    pub current_polymarket_impl_prob: f64,
 }
 
 #[derive(Serialize)]
@@ -43,6 +56,12 @@ impl From<&AlertEvent> for AlertResponse {
                     MarketClusterDiffDivergencyResponse::from(p),
                 ),
             },
+            AlertEvent::AlertConvergency(p) => AlertResponse {
+                r#type: "AlertConvergency".to_string(),
+                payload: AlertPayloadResponse::AlertConvergency(
+                    AlertConvergencyResponse::from(p),
+                ),
+            },
         }
     }
 }
@@ -63,6 +82,19 @@ impl From<&MarketClusterDiffDivergencyPayload> for MarketClusterDiffDivergencyRe
                 p75_diff: p.statistics.p75_diff,
                 p95_diff: p.statistics.p95_diff,
             },
+        }
+    }
+}
+
+impl From<&AlertConvergencyPayload> for AlertConvergencyResponse {
+    fn from(p: &AlertConvergencyPayload) -> Self {
+        Self {
+            cluster_key: p.cluster_key.clone(),
+            cluster_mean_diff: p.cluster_mean_diff,
+            market_type: p.market_type.to_key_string(),
+            outcome: format!("{:?}", p.outcome),
+            initial_polymarket_impl_prob: p.initial_polymarket_impl_prob,
+            current_polymarket_impl_prob: p.current_polymarket_impl_prob,
         }
     }
 }

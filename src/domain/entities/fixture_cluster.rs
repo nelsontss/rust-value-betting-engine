@@ -2,6 +2,8 @@ use core::fmt;
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
+use num_traits::ToPrimitive as _;
+use tracing::warn;
 
 use crate::domain::{
     Platform,
@@ -20,7 +22,7 @@ pub struct FixtureCluster {
     market_type_to_game_ids: HashMap<MarketType, HashSet<String>>,
     updated_at: DateTime<Utc>,
     representative_game: Option<Game>,
-    diffs: HashMap<MarketType, HashMap<Outcome, Vec<f64>>>,
+    diffs: HashMap<MarketType, HashMap<Outcome, Vec<(f64, f64)>>>,
     mean_diffs: HashMap<MarketType, HashMap<Outcome, f64>>,
     closed: bool,
 }
@@ -205,7 +207,7 @@ impl FixtureCluster {
             for (mt, inner) in &self.diffs {
                 let mut inner_out = HashMap::new();
                 for (outcome, v) in inner {
-                    let sum: f64 = v.iter().sum();
+                    let sum: f64 = v.iter().map(|(a, _)| a).sum();
                     inner_out.insert(*outcome, sum / v.len() as f64);
                 }
                 out.insert(*mt, inner_out);
@@ -216,8 +218,8 @@ impl FixtureCluster {
         HashMap::new()
     }
 
-    pub fn live_statistics_diffs(&self) -> HashMap<MarketType, HashMap<Outcome, f64>> {
-        let mut map: HashMap<MarketType, HashMap<Outcome, f64>> = HashMap::new();
+    pub fn live_statistics_diffs(&self) -> HashMap<MarketType, HashMap<Outcome, (f64, f64)>> {
+        let mut map: HashMap<MarketType, HashMap<Outcome, (f64, f64)>> = HashMap::new();
         for (market_type, _) in &self.market_type_to_game_ids {
             let mut inner = HashMap::new();
             for outcome in market_type.outcomes() {
@@ -232,8 +234,12 @@ impl FixtureCluster {
         map
     }
 
-    fn live_diff_for_outcome(&self, market_type: &MarketType, outcome: &Outcome) -> Option<f64> {
-        let mut poly_value: Option<f64> = None;
+    fn live_diff_for_outcome(
+        &self,
+        market_type: &MarketType,
+        outcome: &Outcome,
+    ) -> Option<(f64, f64)> {
+        let mut poly_value: Option<(f64, f64)> = None;
         let mut other_values: Vec<f64> = Vec::new();
 
         for game in self.games() {
@@ -245,16 +251,49 @@ impl FixtureCluster {
             };
 
             if game.platform() == Platform::Polymarket {
-                poly_value = Some(odd.get_implied_probability());
+                let Some(prob) = odd.get_implied_probability().to_f64() else {
+                    warn!(
+                        cluster = %self.key(),
+                        home = game.home_team(),
+                        away = game.away_team(),
+                        ?outcome,
+                        "implied probability not representable as f64; skipping polymarket sample"
+                    );
+                    continue;
+                };
+                let Some(prob_no) = odd
+                    .get_implied_probability_derived_from_no()
+                    .and_then(|p| p.to_f64())
+                else {
+                    warn!(
+                        cluster = %self.key(),
+                        home = game.home_team(),
+                        away = game.away_team(),
+                        ?outcome,
+                        "missing implied probability derived from NO; skipping polymarket sample"
+                    );
+                    continue;
+                };
+                poly_value = Some((prob, prob_no));
             } else {
-                other_values.push(odd.get_implied_probability());
+                let Some(prob) = odd.get_implied_probability().to_f64() else {
+                    warn!(
+                        cluster = %self.key(),
+                        home = game.home_team(),
+                        away = game.away_team(),
+                        ?outcome,
+                        "implied probability not representable as f64; skipping sample"
+                    );
+                    continue;
+                };
+                other_values.push(prob);
             }
         }
 
-        let poly_value = poly_value?;
+        let (poly_value, poly_value_from_no) = poly_value?;
         let median_other = median_of(&mut other_values)?;
 
-        Some(poly_value - median_other)
+        Some((poly_value - median_other, poly_value_from_no - median_other))
     }
 
     pub fn print_games_list(&self) {
@@ -301,6 +340,30 @@ impl FixtureCluster {
 
     pub fn get_game(&self, game_id: &str) -> Option<&Game> {
         self.games.get(game_id)
+    }
+
+    pub fn get_polymarket_impl_prob_of_market_and_outcome(
+        &self,
+        market_type: &MarketType,
+        outcome: &Outcome,
+    ) -> Option<f64> {
+        if let Some((_, polymarket_game)) = self
+            .games
+            .iter()
+            .find(|(_, g)| g.platform() == Platform::Polymarket)
+        {
+            let market = polymarket_game.markets().get(market_type)?;
+
+            let odd = market.odd_for_outcome(outcome)?;
+
+            return if let Some(prob) = odd.get_implied_probability().to_f64() {
+                Some(prob)
+            } else {
+                None
+            };
+        }
+
+        None
     }
 }
 
