@@ -6,3 +6,6 @@ mod platforms;
 pub mod routes;
 mod statistics;
 pub mod debug;
+
+#[cfg(test)]
+mod tests;

@@ -2,6 +2,9 @@ use crate::domain::services::backtesting::{PriceCandle, Signal, Strategy};
 use crate::infrastructure::config::trade_config::TradeConfig;
 use crate::infrastructure::repositories::MarketRow;
 
+#[cfg(test)]
+mod tests;
+
 pub struct DrawValueStrategy {
     pub resolution_minutes: u32,
 }

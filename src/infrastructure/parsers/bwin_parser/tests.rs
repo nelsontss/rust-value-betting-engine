@@ -435,3 +435,148 @@ fn from_frame_type_0_returns_none() {
     };
     assert!(BwinWSEvent::from_frame(frame).is_none());
 }
+
+// --- edge cases: WS close frames and error string deserialization ---
+
+#[test]
+fn parse_ws_event_close_frame_with_error_and_reconnect_flag() {
+    let data = r#"{"type":7,"error":"maximum message size exceeded","allowReconnect":false}"#;
+    let event = BwinParser::parse_ws_event(data).unwrap();
+
+    match event {
+        BwinWSEvent::Close {
+            error,
+            allow_reconnect,
+        } => {
+            assert_eq!("maximum message size exceeded", error);
+            assert!(!allow_reconnect);
+        }
+        _ => panic!("expected Close event"),
+    }
+}
+
+#[test]
+fn parse_ws_event_close_frame_coerces_non_string_error() {
+    let data = r#"{"type":7,"error":{"code": 5}}"#;
+    let event = BwinParser::parse_ws_event(data).unwrap();
+
+    match event {
+        BwinWSEvent::Close { error, .. } => {
+            assert!(error.contains("code"));
+        }
+        _ => panic!("expected Close event"),
+    }
+}
+
+// --- edge cases: parse_single_market rejections ---
+
+#[test]
+fn single_market_without_options_is_rejected() {
+    let om = make_option(
+        vec![("Period", "RegularTime"), ("MarketType", "3way")],
+        vec![],
+    );
+    assert!(BwinParser::parse_option_market_update(json!({"optionMarket": om})).is_empty());
+}
+
+#[test]
+fn single_market_with_too_few_options_is_rejected() {
+    let om = make_option(
+        vec![("Period", "RegularTime"), ("MarketType", "3way")],
+        vec![json!({"price": {"odds": 2.0}}), json!({"price": {"odds": 3.0}})],
+    );
+    assert!(BwinParser::parse_option_market_update(json!({"optionMarket": om})).is_empty());
+}
+
+#[test]
+fn single_market_with_null_odds_is_rejected() {
+    let om = make_option(
+        vec![("Period", "RegularTime"), ("MarketType", "3way")],
+        vec![
+            json!({"price": {"odds": 2.0}}),
+            json!({"price": Value::Null}),
+            json!({"price": {"odds": 4.0}}),
+        ],
+    );
+    assert!(BwinParser::parse_option_market_update(json!({"optionMarket": om})).is_empty());
+}
+
+#[test]
+fn over_under_without_decimal_value_defaults_line_to_zero() {
+    let om = make_option(
+        vec![("Period", "RegularTime"), ("MarketType", "Over/Under")],
+        vec![
+            json!({"price": {"odds": 1.9}}),
+            json!({"price": {"odds": 1.9}}),
+        ],
+    );
+
+    let markets = BwinParser::parse_option_market_update(json!({"optionMarket": om}));
+
+    match markets.first() {
+        Some(Market::Total(t)) => assert!((0.0 - t.line.0).abs() < 1e-6),
+        other => panic!("expected total market, got {:?}", other),
+    }
+}
+
+#[test]
+fn suspended_markets_are_rejected() {
+    let mut om = regular_3way(2.0, 3.0, 4.0);
+    om["status"] = json!("Cancelled");
+
+    assert!(BwinParser::parse_option_market_update(json!({"optionMarket": om})).is_empty());
+}
+
+// --- edge cases: parse_data skips ---
+
+#[test]
+fn parse_data_skips_fixture_without_id_or_teams() {
+    let data = json!({ "fixtures": [
+        json!({ "participants": [] }),
+        json!({
+            "id": "f2",
+            "participants": [
+                json!({"properties": {"type": "HomeTeam"}, "name": {"value": "Benfica"}}),
+            ],
+        }),
+    ]});
+
+    let games = BwinParser::parse_data(data);
+
+    assert!(games.is_empty());
+}
+
+#[test]
+fn parse_data_skips_fixture_with_unparseable_date() {
+    let data = json!({ "fixtures": [json!({
+        "id": "f1",
+        "participants": [
+            json!({"properties": {"type": "HomeTeam"}, "name": {"value": "Benfica"}}),
+            json!({"properties": {"type": "AwayTeam"}, "name": {"value": "Porto"}}),
+        ],
+        "startDate": "not-a-date",
+    })]});
+
+    let games = BwinParser::parse_data(data);
+
+    assert!(games.is_empty());
+}
+
+#[test]
+fn parse_data_uses_fallback_name_when_name_missing() {
+    let data = json!({ "fixtures": [json!({
+        "id": "f1",
+        "participants": [
+            json!({"properties": {"type": "HomeTeam"}, "name": {"value": "Benfica"}}),
+            json!({"properties": {"type": "AwayTeam"}, "name": {"value": "Porto"}}),
+        ],
+        "startDate": "2026-05-01T18:00:00Z",
+        "optionMarkets": [],
+    })]});
+
+    let games = BwinParser::parse_data(data);
+
+    assert_eq!(1, games.len());
+    let link = games[0].link_str().unwrap();
+    assert!(link.contains("benfica-porto-f1"));
+}

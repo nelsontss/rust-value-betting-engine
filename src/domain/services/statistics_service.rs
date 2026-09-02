@@ -13,6 +13,9 @@ use crate::{
     shared::error::Result,
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug)]
 pub struct StatisticsService {
     fixture_cluster_repository: Arc<FixtureClusterRepository>,

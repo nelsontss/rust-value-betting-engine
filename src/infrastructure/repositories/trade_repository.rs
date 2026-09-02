@@ -1,6 +1,9 @@
 use crate::{domain::entities::trade::Trade, shared::error::Result};
 use sqlx::SqlitePool;
 
+#[cfg(test)]
+mod tests;
+
 pub struct TradeRepository {
     pool: SqlitePool,
 }
@@ -89,7 +92,7 @@ impl TradeRepository {
     }
 
     pub async fn get_open_trades(&self) -> Result<Vec<Trade>> {
-        let rows = sqlx::query("SELECT * FROM trades WHERE status = 'Open'")
+        let rows = sqlx::query("SELECT * FROM trades WHERE status = 'open'")
             .fetch_all(&self.pool)
             .await?;
         Ok(rows

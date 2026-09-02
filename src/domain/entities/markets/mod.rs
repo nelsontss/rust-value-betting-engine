@@ -5,6 +5,9 @@ pub mod match_result;
 pub mod moneyline;
 pub mod total;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Line(pub f32);
 

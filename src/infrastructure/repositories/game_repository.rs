@@ -118,10 +118,7 @@ impl GameRepository {
         Ok(())
     }
 
-    pub(crate) async fn upsert_game_own_tx(
-        pool: &sqlx::SqlitePool,
-        game: &Game,
-    ) -> Result<()> {
+    pub(crate) async fn upsert_game_own_tx(pool: &sqlx::SqlitePool, game: &Game) -> Result<()> {
         let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
         Self::upsert_game_row(game, &mut *tx).await?;
         Self::insert_markets_inner(game, &mut *tx).await?;
@@ -129,10 +126,7 @@ impl GameRepository {
         Ok(())
     }
 
-    async fn upsert_game_row(
-        game: &Game,
-        conn: &mut SqliteConnection,
-    ) -> Result<()> {
+    async fn upsert_game_row(game: &Game, conn: &mut SqliteConnection) -> Result<()> {
         let now = Utc::now().timestamp();
         sqlx::query(
             "INSERT INTO games (id, home_team, away_team, country, competition, platform, date, link, created_at, updated_at)
@@ -226,10 +220,7 @@ impl GameRepository {
         Ok(())
     }
 
-    async fn insert_markets_inner(
-        game: &Game,
-        conn: &mut SqliteConnection,
-    ) -> Result<()> {
+    async fn insert_markets_inner(game: &Game, conn: &mut SqliteConnection) -> Result<()> {
         let now = Utc::now().timestamp();
 
         let last_markets = last_market_columns(&mut *conn, &game.id).await?;
@@ -275,8 +266,11 @@ impl GameRepository {
             .await?;
         }
 
-        let current_keys: std::collections::HashSet<MarketKey> =
-            game.markets().values().map(|m| market_key(&market_columns(m))).collect();
+        let current_keys: std::collections::HashSet<MarketKey> = game
+            .markets()
+            .values()
+            .map(|m| market_key(&market_columns(m)))
+            .collect();
 
         for (key, _) in last_markets.iter() {
             if !current_keys.contains(key) {
@@ -286,7 +280,7 @@ impl GameRepository {
                 .bind(&game.id)
                 .bind(&key.0)
                 .bind(&key.1)
-                .bind(key.2)
+                .bind(key.2.map(f32::from_bits))
                 .execute(&mut *conn)
                 .await?;
             }
@@ -295,7 +289,8 @@ impl GameRepository {
         Ok(())
     }
 
-    async fn get_markets(&self, game_id: &str) -> Result<Vec<Market>> {        let rows = sqlx::query(
+    async fn get_markets(&self, game_id: &str) -> Result<Vec<Market>> {
+        let rows = sqlx::query(
             "SELECT * FROM markets WHERE game_id = ? AND is_last_market = 1 ORDER BY market_type",
         )
         .bind(game_id)
@@ -448,7 +443,8 @@ fn market_columns(market: &Market) -> MarketColumns {
     }
 }
 
-fn market_from_row(row: &SqliteRow) -> Result<Market> {    let cols = MarketColumns {
+fn market_from_row(row: &SqliteRow) -> Result<Market> {
+    let cols = MarketColumns {
         id: row.try_get("market_id")?,
         market_type: row.try_get("market_type")?,
         line: row.try_get("line")?,
@@ -535,166 +531,4 @@ fn platform_from_string(value: &str) -> Result<Platform> {
 }
 
 #[cfg(test)]
-mod tests {
-    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-    use uuid::Uuid;
-
-    use crate::domain::entities::{
-        Odd,
-        markets::{Line, moneyline::MoneylineMarket, total::TotalMarket},
-    };
-
-    use super::*;
-
-    async fn repository() -> GameRepository {
-        let db_path = format!(
-            "{}/game_repository_test_{}.db",
-            std::env::temp_dir().display(),
-            Uuid::new_v4()
-        );
-        let pool = SqlitePool::connect(&format!("{}?mode=rwc", db_path))
-            .await
-            .unwrap();
-        let repo = GameRepository { pool };
-        repo.run_migrations().await.unwrap();
-        repo
-    }
-
-    fn fixture_date() -> NaiveDateTime {
-        NaiveDateTime::new(
-            NaiveDate::from_ymd_opt(2026, 5, 1).unwrap(),
-            NaiveTime::from_hms_milli_opt(18, 0, 0, 0).unwrap(),
-        )
-    }
-
-    fn build_game(platform: Platform) -> Game {
-        Game::new(
-            "Benfica",
-            "Sporting",
-            "Portugal",
-            "Primeira Liga",
-            fixture_date(),
-            platform,
-            vec![
-                Market::Moneyline(MoneylineMarket::new(
-                    "ml-1".to_string(),
-                    Odd::new(2.0).unwrap(),
-                    Odd::new(1.8).unwrap(),
-                )),
-                Market::Total(TotalMarket::new(
-                    "total-1".to_string(),
-                    Line(2.5),
-                    Odd::new(1.9).unwrap(),
-                    Odd::new(1.9).unwrap(),
-                )),
-            ],
-        None,
-        )
-    }
-
-    #[tokio::test]
-    async fn insert_then_get_round_trips_game_and_markets() {
-        let repo = repository().await;
-        let game = build_game(Platform::Betano);
-
-        repo.insert_game(&game).await.unwrap();
-
-        let loaded = repo.get_game(&game.id).await.unwrap().unwrap();
-
-        assert_eq!(game.id, loaded.id);
-        assert_eq!(game.date, loaded.date);
-        assert_eq!(game.home_team(), loaded.home_team());
-        assert_eq!(game.away_team(), loaded.away_team());
-        assert_eq!(game.country(), loaded.country());
-        assert_eq!(game.competition(), loaded.competition());
-        assert_eq!(game.platform(), loaded.platform());
-        assert_eq!(game.markets(), loaded.markets());
-    }
-
-    #[tokio::test]
-    async fn platform_round_trips_for_all_variants() {
-        for platform in [
-            Platform::Betano,
-            Platform::LeBull,
-            Platform::Bwin,
-            Platform::Polymarket,
-        ] {
-            let repo = repository().await;
-            let game = build_game(platform);
-
-            repo.insert_game(&game).await.unwrap();
-            let loaded = repo.get_game(&game.id).await.unwrap().unwrap();
-
-            assert_eq!(platform, loaded.platform());
-        }
-    }
-
-    #[tokio::test]
-    async fn get_game_returns_none_for_unknown_id() {
-        let repo = repository().await;
-
-        let loaded = repo.get_game("does-not-exist").await.unwrap();
-
-        assert!(loaded.is_none());
-    }
-
-    #[tokio::test]
-    async fn update_game_replaces_markets() {
-        let repo = repository().await;
-        let mut game = build_game(Platform::Betano);
-        repo.insert_game(&game).await.unwrap();
-
-        game.update_markets(vec![Market::Moneyline(MoneylineMarket::new(
-            "ml-1".to_string(),
-            Odd::new(2.4).unwrap(),
-            Odd::new(1.6).unwrap(),
-        ))]);
-
-        repo.update_game(&game).await.unwrap();
-
-        let loaded = repo.get_game(&game.id).await.unwrap().unwrap();
-        assert_eq!(game.markets(), loaded.markets());
-    }
-
-    #[tokio::test]
-    async fn get_game_markets_history_appends_each_tick_in_order() {
-        let repo = repository().await;
-        let mut game = build_game(Platform::Betano);
-        repo.insert_game(&game).await.unwrap();
-
-        let updated_market = Market::Moneyline(MoneylineMarket::new(
-            "ml-1".to_string(),
-            Odd::new(2.4).unwrap(),
-            Odd::new(1.6).unwrap(),
-        ));
-        game.update_markets(vec![updated_market.clone()]);
-        repo.update_game(&game).await.unwrap();
-
-        let history = repo.get_game_markets_history(&game.id).await.unwrap();
-
-        assert_eq!(3, history.len());
-        assert!(
-            history
-                .iter()
-                .any(|point| point.market() == &updated_market)
-        );
-        assert_eq!(
-            2,
-            history
-                .iter()
-                .filter(|point| matches!(point.market(), Market::Moneyline(_)))
-                .count()
-        );
-        assert_eq!(
-            1,
-            history
-                .iter()
-                .filter(|point| matches!(point.market(), Market::Total(_)))
-                .count()
-        );
-
-        for pair in history.windows(2) {
-            assert!(pair[0].datetime() <= pair[1].datetime());
-        }
-    }
-}
+mod tests;

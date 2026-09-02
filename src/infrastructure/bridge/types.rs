@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::entities::Platform;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum BridgeMessage {

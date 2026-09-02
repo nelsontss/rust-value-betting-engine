@@ -6,6 +6,9 @@ use crate::domain::services::backtesting::{
 use crate::infrastructure::repositories::PolymarketRepository;
 use crate::shared::error::Result;
 
+#[cfg(test)]
+mod tests;
+
 pub struct BacktestConfig {
     pub resolution_minutes: u32,
     pub from: Option<String>,

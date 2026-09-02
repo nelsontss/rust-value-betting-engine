@@ -3,6 +3,9 @@ use crate::domain::{
     entities::{Odd, ThreeWayLineArbitrage, markets::Line, odd::best_odd_with_id},
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HandicapMarket {
     id: String,

@@ -1,6 +1,9 @@
 use crate::domain::services::backtesting::{BacktestMetrics, PriceCandle, Signal, Strategy};
 use crate::infrastructure::repositories::MarketRow;
 
+#[cfg(test)]
+mod tests;
+
 pub struct TradeSimulator;
 
 impl TradeSimulator {

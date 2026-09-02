@@ -45,6 +45,8 @@ heap-profiling = ["dhat"]
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["async", "async_tokio"] }
+tower = { version = "0.5", features = ["util"] }
+wiremock = "0.6"
 
 [[bench]]
 name = "benchmarks"

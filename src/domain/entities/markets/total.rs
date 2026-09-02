@@ -122,26 +122,4 @@ fn under_return_multiplier(component: i32, total: i32, odd: Odd) -> f64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn total_market_arbitrage_opportunites_rejects_integer_lines_with_push_state() {
-        let first_market = TotalMarket::new(
-            "first-total".to_string(),
-            Line(2.0),
-            Odd::new(2.2).unwrap(),
-            Odd::new(1.8).unwrap(),
-        );
-        let second_market = TotalMarket::new(
-            "second-total".to_string(),
-            Line(2.0),
-            Odd::new(1.8).unwrap(),
-            Odd::new(2.2).unwrap(),
-        );
-
-        let result = TotalMarket::arbitrage_opportunites(&vec![first_market, second_market]);
-
-        assert_eq!(None, result);
-    }
-}
+mod tests;

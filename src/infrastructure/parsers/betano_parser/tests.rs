@@ -371,3 +371,68 @@ fn parse_data_multiple_blocks() {
     let games = BetanoParser::parse_data(data);
     assert_game_counts(&games, &["evt-b1", "evt-b2"]);
 }
+
+#[test]
+fn parse_data_skips_events_without_id_or_name() {
+    let events = vec![
+        json!({"name": "A - B", "startTime": 1_777_000_000_000i64}), // no id
+        json!({"id": "e2", "startTime": 1_777_000_000_000i64}),      // no name
+    ];
+
+    let games = BetanoParser::parse_data(json!({"blocks": [block_with_events(events)]}));
+
+    assert!(games.is_empty());
+}
+
+#[test]
+fn parse_data_skips_events_without_start_time() {
+    let events = vec![json!({
+        "id": "e1",
+        "name": "Benfica - Porto",
+    })];
+
+    let games = BetanoParser::parse_data(json!({"blocks": [block_with_events(events)]}));
+
+    assert!(games.is_empty());
+}
+
+#[test]
+fn parse_data_without_markets_creates_game_without_markets() {
+    let events = vec![json!({
+        "id": "e1",
+        "name": "Benfica - Porto",
+        "leagueName": "Liga Portugal",
+        "regionName": "Portugal",
+        "startTime": 1_777_000_000_000i64,
+    })];
+
+    let games = BetanoParser::parse_data(json!({"blocks": [block_with_events(events)]}));
+
+    assert_game_counts(&games, &["e1"]);
+    assert!(games[0].markets().is_empty());
+}
+
+#[test]
+fn parse_data_skips_markets_without_selections() {
+    let events = vec![betano_event(
+        "e1",
+        "Benfica",
+        "Porto",
+        vec![json!({"typeId": 1, "id": "m1"})], // no selections
+    )];
+
+    let games = BetanoParser::parse_data(json!({"blocks": [block_with_events(events)]}));
+
+    assert_game_counts(&games, &["e1"]);
+    assert!(games[0].markets().is_empty());
+}
+
+#[test]
+fn parse_data_builds_link_from_slug() {
+    let events = vec![betano_event("e1", "Benfica", "Porto", vec![])];
+
+    let games = BetanoParser::parse_data(json!({"blocks": [block_with_events(events)]}));
+
+    let link = games[0].link_str().unwrap();
+    assert!(link.starts_with("https://www.betano.pt/odds/benfica-porto/"));
+}

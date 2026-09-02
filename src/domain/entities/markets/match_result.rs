@@ -3,6 +3,9 @@ use crate::domain::{
     entities::{MatchResultArbitrage, Odd, odd::best_odd_with_id},
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchResultMarket {
     pub id: String,

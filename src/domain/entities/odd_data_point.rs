@@ -2,6 +2,9 @@ use chrono::{DateTime, Utc};
 
 use crate::domain::Market;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, PartialEq)]
 pub struct MarketDataPoint {
     market: Market,

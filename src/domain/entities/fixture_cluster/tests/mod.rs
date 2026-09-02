@@ -6,6 +6,7 @@ use crate::domain::entities::{
 };
 
 mod statistics;
+mod lifecycle;
 
 fn fixture_date(hour: u32, min: u32) -> NaiveDateTime {
     NaiveDateTime::new(

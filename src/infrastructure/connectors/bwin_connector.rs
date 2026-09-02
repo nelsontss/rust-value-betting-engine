@@ -16,6 +16,9 @@ use crate::shared::error::Result;
 
 pub struct BwinConnector {}
 
+#[cfg(test)]
+mod tests;
+
 impl BwinConnector {
     pub async fn start(&self, sender: Sender<BookmakerEvent>) -> Result<()> {
         let registry = ParserRegistry::new();

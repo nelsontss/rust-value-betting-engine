@@ -18,3 +18,6 @@ pub async fn serve(app_state: Arc<AppState>, shutdown: impl std::future::Future<
 
 pub mod dto;
 pub mod routes;
+
+#[cfg(test)]
+mod tests;

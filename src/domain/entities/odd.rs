@@ -73,34 +73,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use polymarket_client_sdk_v2::types::dec;
-
-    #[test]
-    fn odd_rejects_initialization_with_non_positive_doubles() {
-        assert!(matches!(Odd::new(-1.0), Err(OddError::NonPositive(v)) if v == -1.0));
-        assert!(matches!(Odd::new(0.0), Err(OddError::NonPositive(v)) if v == 0.0));
-        assert!(matches!(Odd::new(f64::NAN), Err(OddError::NonPositive(v)) if v.is_nan()));
-    }
-
-    #[test]
-    fn odd_rejects_initialization_with_invalid_probabilities() {
-        assert_eq!(
-            OddError::InvalidProbability(Decimal::ZERO),
-            Odd::new_from_prob(Decimal::ZERO, Decimal::ONE).unwrap_err()
-        );
-        assert_eq!(
-            OddError::InvalidProbability(dec!(1.5)),
-            Odd::new_from_prob(dec!(1.5), dec!(0.5)).unwrap_err()
-        );
-    }
-
-    #[test]
-    fn odd_round_trips_between_decimal_and_probability() {
-        let odd = Odd::new(2.5).unwrap();
-        let prob = odd.get_implied_probability();
-        let reconstructed = Odd::new_from_prob(prob, Decimal::ONE - prob).unwrap();
-        assert_eq!(odd.odd, reconstructed.odd);
-    }
-}
+mod tests;

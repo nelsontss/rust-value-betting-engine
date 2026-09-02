@@ -404,3 +404,108 @@ fn parse_event_with_tomorrow_date_is_included() {
     let games = LeBullParser::parse_data(data);
     assert_eq!(games.len(), 1);
 }
+
+fn parse_data_of_events(events: Vec<serde_json::Value>) -> Vec<Market> {
+    LeBullParser::parse_data(json!([league("Portugal", "Liga Portugal", events)]))
+        .into_iter()
+        .flat_map(|g| g.markets().values().cloned().collect::<Vec<_>>())
+        .collect()
+}
+
+#[test]
+fn parse_data_skips_events_without_identifier_or_teams() {
+    let events = vec![
+        json!({"teamA": "A", "teamB": "B", "isLive": false}), // no eventId
+        json!({"eventId": 1, "teamB": "B", "isLive": false}), // no teamA
+        json!({"eventId": 1, "teamA": "A", "isLive": false}), // no teamB
+    ];
+
+    assert!(parse_data_of_events(events).is_empty());
+}
+
+#[test]
+fn parse_data_skips_stake_types_without_stakes() {
+    let events = vec![json!({
+        "eventId": 1,
+        "teamA": "Porto",
+        "teamB": "Benfica",
+        "isLive": false,
+        "date": format!("/Date({})/", today_ms()),
+        "stakeTypes": vec![json!({"stakeTypeId": 1})], // no "stakes" array
+    })];
+
+    let markets = parse_data_of_events(events);
+
+    assert!(markets.is_empty());
+}
+
+#[test]
+fn parse_data_ignores_markets_with_zero_odds() {
+    // 1x2 with a zero odd must not produce a market
+    let events = vec![lebull_event(
+        1,
+        "Porto",
+        "Benfica",
+        vec![json!({
+            "stakeTypeId": 1,
+            "stakes": vec![stake(1, 0.0, 0.0), stake(2, 0.0, 3.4), stake(3, 0.0, 5.0)],
+        })],
+        false,
+    )];
+
+    assert!(parse_data_of_events(events).is_empty());
+}
+
+#[test]
+fn parse_data_parses_double_chance_stake_type_37() {
+    let events = vec![lebull_event(
+        1,
+        "Porto",
+        "Benfica",
+        vec![json!({
+            "stakeTypeId": 37,
+            "stakes": vec![stake(1, 0.0, 1.3), stake(2, 0.0, 1.25), stake(3, 0.0, 1.7)],
+        })],
+        false,
+    )];
+
+    let markets = parse_data_of_events(events);
+
+    assert!(matches!(markets.first(), Some(Market::DoubleChance(_))));
+}
+
+#[test]
+fn extract_ms_parses_plain_and_offset_formats() {
+    use crate::infrastructure::parsers::lebull_parser::extract_ms;
+
+    assert_eq!(Some(1_000), extract_ms("/Date(1000)/"));
+    // +0100 adds one hour
+    assert_eq!(Some(1_000 + 3_600_000), extract_ms("/Date(1000+0100)/"));
+    assert_eq!(Some(1_000 - 7_200_000), extract_ms("/Date(1000-0200)/"));
+    assert_eq!(None, extract_ms("1000"));
+    assert_eq!(None, extract_ms("/Date(1000"));
+    assert_eq!(Some(1_000), extract_ms("/Date(1000abc)/"));
+}
+
+#[test]
+fn parse_date_falls_back_to_timestamp_field_then_epoch() {
+    use crate::infrastructure::parsers::lebull_parser::parse_date;
+
+    let event = json!({ "timestamp": 1_000 });
+    assert_eq!(
+        chrono::DateTime::UNIX_EPOCH.naive_utc() + chrono::TimeDelta::milliseconds(1_000),
+        parse_date(&event)
+    );
+
+    let event = json!({ "date": "not-a-date" });
+    assert_eq!(
+        chrono::DateTime::UNIX_EPOCH.naive_utc(),
+        parse_date(&event)
+    );
+
+    let event = json!({});
+    assert_eq!(
+        chrono::DateTime::UNIX_EPOCH.naive_utc(),
+        parse_date(&event)
+    );
+}

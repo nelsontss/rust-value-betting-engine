@@ -6,6 +6,9 @@ use sqlx::sqlite::SqliteRow;
 use strum::{Display, EnumString};
 use uuid::Uuid;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Clone, Debug, Display, EnumString, PartialEq)]
 #[strum(serialize_all = "lowercase")]
 pub enum TradeStatus {

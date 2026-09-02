@@ -10,6 +10,9 @@ use crate::domain::{
     services::{cluster_statistics::StatisticsValues, statistics_service::StatisticsService},
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone)]
 pub struct MarketClusterDiffDivergencyPayload {
     pub cluster_key: String,

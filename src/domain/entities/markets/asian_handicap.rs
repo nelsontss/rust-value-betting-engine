@@ -123,27 +123,4 @@ fn away_return_multiplier(component: i32, margin: i32, odd: Odd) -> f64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn asian_handicap_market_arbitrage_opportunites_handles_quarter_lines() {
-        let first_market = AsianHandicapMarket::new(
-            "first-asian".to_string(),
-            Line(-0.25),
-            Odd::new(2.2).unwrap(),
-            Odd::new(1.8).unwrap(),
-        );
-        let second_market = AsianHandicapMarket::new(
-            "second-asian".to_string(),
-            Line(-0.25),
-            Odd::new(1.8).unwrap(),
-            Odd::new(2.2).unwrap(),
-        );
-
-        let result =
-            AsianHandicapMarket::arbitrage_opportunites(&vec![first_market, second_market]);
-
-        assert!(matches!(result, Some(Arbitrage::TwoWayLineArbitrage(_))));
-    }
-}
+mod tests;

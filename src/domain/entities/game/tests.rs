@@ -241,3 +241,106 @@ fn update_market_adds_new_market_for_different_logical_type() {
             .contains_key(&MarketType::Total { line: 250 })
     );
 }
+
+#[test]
+fn similarity_score_is_one_for_identical_games() {
+    let left = build_game("Benfica", "Sporting", fixture_date(1));
+    let right = build_game("Benfica", "Sporting", fixture_date(1));
+
+    assert!((left.similarity_score(&right) - 1.0).abs() < 1e-9);
+}
+
+#[test]
+fn similarity_score_is_zero_for_different_dates() {
+    let left = build_game("Benfica", "Sporting", fixture_date(1));
+    let right = build_game("Benfica", "Sporting", fixture_date(2));
+
+    assert_eq!(0.0, left.similarity_score(&right));
+}
+
+#[test]
+fn similarity_score_is_between_zero_and_one_for_partially_similar_games() {
+    let left = build_game("Benfica", "Sporting", fixture_date(1));
+    let right = build_game("Benfica", "Porto", fixture_date(1));
+
+    let score = left.similarity_score(&right);
+
+    assert!(score > 0.0 && score < 1.0);
+}
+
+#[test]
+fn new_with_id_preserves_the_provided_identifier() {
+    let markets = vec![moneyline_market("ml-1", 2.0, 1.8)];
+    let game = Game::new_with_id(
+        "fixed-id",
+        "Benfica",
+        "Sporting",
+        DEFAULT_COUNTRY,
+        DEFAULT_COMPETITION,
+        fixture_date(1),
+        DEFAULT_PLATFORM,
+        markets,
+        None,
+    );
+
+    assert_eq!("fixed-id", game.id);
+    assert_eq!("Benfica", game.home_team());
+}
+
+#[test]
+fn canonical_name_contains_normalized_teams_and_date() {
+    let game = build_game("Benfica", "Sporting", fixture_date(1));
+
+    let canonical = game.canonical_name();
+
+    assert!(canonical.contains("benfica"));
+    assert!(canonical.contains("sporting"));
+    assert!(canonical.contains("vs"));
+    assert!(canonical.contains("2026-05-01"));
+}
+
+#[test]
+fn link_accessors_round_trip_through_url() {
+    let url: url::Url = "https://www.betano.pt/game/123".parse().unwrap();
+    let game = Game::new(
+        "Benfica",
+        "Sporting",
+        DEFAULT_COUNTRY,
+        DEFAULT_COMPETITION,
+        fixture_date(1),
+        DEFAULT_PLATFORM,
+        vec![],
+        Some(url.clone()),
+    );
+
+    assert_eq!(Some(&url), game.link());
+    assert_eq!(Some("https://www.betano.pt/game/123".to_string()), game.link_str());
+}
+
+#[test]
+fn game_without_link_returns_none_for_link_accessors() {
+    let game = build_game("Benfica", "Sporting", fixture_date(1));
+
+    assert!(game.link().is_none());
+    assert_eq!(None, game.link_str());
+}
+
+#[test]
+fn game_exposes_metadata_accessors() {
+    let game = Game::new(
+        "Benfica",
+        "Sporting",
+        "Portugal",
+        "Primeira Liga",
+        fixture_date(1),
+        Platform::Bwin,
+        vec![],
+        None,
+    );
+
+    assert_eq!("Benfica", game.home_team());
+    assert_eq!("Sporting", game.away_team());
+    assert_eq!("Portugal", game.country());
+    assert_eq!("Primeira Liga", game.competition());
+    assert_eq!(Platform::Bwin, game.platform());
+}

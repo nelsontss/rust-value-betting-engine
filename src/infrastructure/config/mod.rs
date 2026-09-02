@@ -7,3 +7,6 @@ impl BridgeConfig {
     pub const MAX_LOG_LINES: usize = 1000;
     pub const TRIM_LOG_TO: usize = 500;
 }
+
+#[cfg(test)]
+mod tests;

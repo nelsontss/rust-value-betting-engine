@@ -11,6 +11,9 @@ use crate::{
     shared::error::Result,
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug)]
 pub struct MarketService {
     game_repository: Arc<GameRepository>,

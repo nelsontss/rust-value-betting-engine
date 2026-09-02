@@ -151,3 +151,17 @@ fn start_handles_truncated_body_gracefully() {
     assert!(result.is_ok(), "start should handle truncated body");
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn start_at_fails_when_socket_does_not_exist() {
+    use crate::application::services::bookmaker_scrapper_service::BookmakerEvent;
+
+    let (tx, _rx) = tokio::sync::mpsc::channel::<BookmakerEvent>(10);
+
+    let result = crate::infrastructure::connectors::bridge_connector::BridgeConnector::start_at(
+        tx,
+        "/tmp/definitely-not-an-odds-bridge-socket",
+    );
+
+    assert!(result.is_err());
+}

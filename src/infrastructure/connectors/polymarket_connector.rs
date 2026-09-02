@@ -41,6 +41,9 @@ pub struct PolymarketConnector {
     gamma_client: Client,
 }
 
+#[cfg(test)]
+mod tests;
+
 const SOCCER_MATCH_DURATION_MINS: i64 = 120;
 
 fn is_event_expired(event: &GammaEvent) -> bool {
