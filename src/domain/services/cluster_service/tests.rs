@@ -941,7 +941,7 @@ async fn subscribe_to_cluster_updates_receives_updates_on_cluster_changes() {
         .expect("cluster update should be broadcast")
         .unwrap();
 
-    assert_eq!(2, update.game_count());
+    assert_eq!(2, update.cluster.game_count());
 }
 
 use super::ClusterServiceErrors;
@@ -1155,5 +1155,5 @@ async fn insert_games_updates_existing_cluster_and_broadcasts_when_multi_game() 
         .await
         .expect("updated cluster should be broadcast")
         .unwrap();
-    assert_eq!(2, update.game_count());
+    assert_eq!(2, update.cluster.game_count());
 }

@@ -23,12 +23,18 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug, Clone)]
+pub struct FixtureClusterUpdated {
+    pub cluster: Arc<FixtureCluster>,
+    pub updated_markets: Vec<MarketType>,
+}
+
 #[derive(Debug)]
 pub struct ClusterService {
     game_id_to_fixture_cluster_key: DashMap<String, String>,
     cluster_id_to_date: DashMap<String, NaiveDateTime>,
     clusters: DashMap<NaiveDateTime, DashMap<String, Arc<FixtureCluster>>>,
-    event_tx: broadcast::Sender<Arc<FixtureCluster>>,
+    event_tx: broadcast::Sender<FixtureClusterUpdated>,
     market_service: Option<Arc<MarketService>>,
     fixture_cluster_repository: Option<Arc<FixtureClusterRepository>>,
     statistics_service: Option<Arc<StatisticsService>>,
@@ -250,7 +256,10 @@ impl ClusterService {
                                 market_service.send_new_market_update(&game_id, game_ref.markets());
                             }
 
-                            let _ = self.event_tx.send(cluster.clone());
+                            let _ = self.event_tx.send(FixtureClusterUpdated {
+                                cluster: cluster.clone(),
+                                updated_markets: vec![],
+                            });
 
                             self.persist_cluster(Arc::clone(cluster));
 
@@ -295,18 +304,24 @@ impl ClusterService {
                     {
                         let cluster = occupied.get_mut();
                         if cluster.get_game(game_id).is_some() {
-                            Arc::make_mut(cluster).update_markets(
+                            let updated_markets = Arc::make_mut(cluster).update_markets(
                                 game_id,
                                 game.markets().values().cloned().collect(),
                             );
 
-                            if cluster.game_count() > 1 {
-                                let _ = self.event_tx.send(cluster.clone());
+                            self.persist_cluster(Arc::clone(cluster));
 
-                                self.persist_cluster(Arc::clone(cluster));
+                            if !updated_markets.is_empty() {
+                                let _ = self.event_tx.send(FixtureClusterUpdated {
+                                    cluster: cluster.clone(),
+                                    updated_markets,
+                                });
+
+                                if cluster.game_count() > 1 {
+                                    arbitrages.append(&mut cluster.arbitrage_opportunites());
+                                }
                             }
 
-                            arbitrages.append(&mut cluster.arbitrage_opportunites());
                             if let Some(market_service) = &self.market_service {
                                 market_service.send_new_market_update(game_id, game.markets());
                             }
@@ -332,7 +347,7 @@ impl ClusterService {
         {
             let cluster = cluster_ref.value_mut();
             if cluster.get_game(game_id).is_some() {
-                Arc::make_mut(cluster).update_markets(game_id, markets);
+                let updated_markets = Arc::make_mut(cluster).update_markets(game_id, markets);
 
                 let game = cluster
                     .get_game(game_id)
@@ -342,13 +357,18 @@ impl ClusterService {
                     market_service.send_new_market_update(game_id, new_markets);
                 }
 
-                let _ = self.event_tx.send(cluster.clone());
+                self.persist_cluster(Arc::clone(cluster));
 
-                if cluster.game_count() > 1 {
-                    self.persist_cluster(Arc::clone(&cluster));
+                if !updated_markets.is_empty() {
+                    let _ = self.event_tx.send(FixtureClusterUpdated {
+                        cluster: cluster.clone(),
+                        updated_markets,
+                    });
+
+                    if cluster.game_count() > 1 {
+                        arbitrages = cluster.arbitrage_opportunites();
+                    }
                 }
-
-                arbitrages = cluster.arbitrage_opportunites();
             }
         }
 
@@ -388,7 +408,7 @@ impl ClusterService {
         Err(ClusterNotFound)
     }
 
-    pub fn subscribe_to_cluster_updates(&self) -> Receiver<Arc<FixtureCluster>> {
+    pub fn subscribe_to_cluster_updates(&self) -> Receiver<FixtureClusterUpdated> {
         self.event_tx.subscribe()
     }
 

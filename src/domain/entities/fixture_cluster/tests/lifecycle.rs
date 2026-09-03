@@ -157,7 +157,7 @@ fn live_diffs_are_skipped_without_derived_from_no_probability() {
         ))
         .unwrap();
 
-    assert!(cluster.live_statistics_diffs().is_empty());
+    assert!(cluster.live_statistics_diffs(&[]).is_empty());
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn live_diffs_median_averages_two_bookmakers() {
         ))
         .unwrap();
 
-    let diffs = cluster.live_statistics_diffs();
+    let diffs = cluster.live_statistics_diffs(&[]);
 
     let home = diffs
         .get(&MarketType::Total { line: 250 })

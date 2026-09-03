@@ -132,7 +132,7 @@ impl FixtureCluster {
     }
 
     fn record_live_diffs(&mut self) {
-        for (market_type, inner) in self.live_statistics_diffs() {
+        for (market_type, inner) in self.live_statistics_diffs(&[]) {
             for (outcome, diff) in inner {
                 self.diffs
                     .entry(market_type)
@@ -144,30 +144,31 @@ impl FixtureCluster {
         }
     }
 
-    pub fn update_markets(&mut self, game_id: &str, markets: Vec<Market>) {
-        if self.games.contains_key(game_id) {
-            self.games
-                .entry(game_id.to_string())
-                .and_modify(|g| g.update_markets(markets));
-
-            let game = self.games.get(game_id).unwrap();
-            let market_types = game.markets().keys().cloned().collect::<Vec<_>>();
-
-            if game.platform() == FixtureCluster::REPRESENTATIVE_PLATFORM {
-                self.representative_game = Some(game.clone());
-            }
-
-            for market_type in market_types {
-                self.market_type_to_game_ids
-                    .entry(market_type.clone())
-                    .or_default()
-                    .insert(game_id.to_string());
-            }
-
-            self.record_live_diffs();
-
-            self.updated_at = chrono::Utc::now();
+    pub fn update_markets(&mut self, game_id: &str, markets: Vec<Market>) -> Vec<MarketType> {
+        if markets.is_empty() {
+            return Vec::new();
         }
+
+        let Some(game) = self.games.get_mut(game_id) else {
+            return Vec::new();
+        };
+
+        let updated_markets: Vec<MarketType> = game.update_markets(markets).into_iter().collect();
+        let market_types: Vec<MarketType> = game.markets().keys().cloned().collect();
+        let game_id = game_id.to_string();
+
+        for market_type in market_types {
+            self.market_type_to_game_ids
+                .entry(market_type)
+                .or_default()
+                .insert(game_id.clone());
+        }
+
+        self.record_live_diffs();
+
+        self.updated_at = chrono::Utc::now();
+
+        updated_markets
     }
 
     pub fn arbitrage_opportunites(&self) -> Vec<Arbitrage> {
@@ -218,9 +219,18 @@ impl FixtureCluster {
         HashMap::new()
     }
 
-    pub fn live_statistics_diffs(&self) -> HashMap<MarketType, HashMap<Outcome, (f64, f64)>> {
+    pub fn live_statistics_diffs(
+        &self,
+        for_markets: &[MarketType],
+    ) -> HashMap<MarketType, HashMap<Outcome, (f64, f64)>> {
         let mut map: HashMap<MarketType, HashMap<Outcome, (f64, f64)>> = HashMap::new();
-        for (market_type, _) in &self.market_type_to_game_ids {
+        let market_types: Box<dyn Iterator<Item = &MarketType>> = if for_markets.is_empty() {
+            Box::new(self.market_type_to_game_ids.keys())
+        } else {
+            Box::new(for_markets.iter())
+        };
+
+        for market_type in market_types {
             let mut inner = HashMap::new();
             for outcome in market_type.outcomes() {
                 if let Some(diff) = self.live_diff_for_outcome(market_type, &outcome) {

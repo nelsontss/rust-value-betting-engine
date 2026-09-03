@@ -377,3 +377,14 @@
         38.9 [ ] Persist both diff components and compute separate `p05_no/p95_no` quantiles (option B — only if NO signals prove too rare under the conservative yes-quantile thresholds)
         38.10 [ ] Re-enable minimum sample guard (`samples < 20`) for divergency alerts
         38.11 [ ] Validate `impl_prob_no ∈ (0,1)` in `Odd::new_from_prob` (guard against degenerate books)
+
+39. [X] Alert service refactor and cluster update filtering
+
+        39.1 [X] Restructure `AlertService` as newtype over private `Arc<AlertServiceInner>`; logic as focused methods (`set_current_statistics`, `check_monitors_for_regression`, `scan_for_divergency`, `monitor_regression_to_mean`) with dedicated subscription tasks for cluster and statistics events (`alert_service.rs`)
+        39.2 [X] Cache historical statistics in a `RwLock` snapshot on the alert service, refreshed via `StatisticsUpdated` events — removes the full statistics rebuild on every cluster event
+        39.3 [X] Broadcast `FixtureClusterUpdated { cluster, updated_markets: Vec<MarketType> }` from all `ClusterService` send sites; `FixtureCluster::update_markets` returns the dirty `MarketType` set
+        39.4 [X] `live_statistics_diffs(&[MarketType])` computes diffs only for touched markets (empty slice = all); alert service divergence scan and monitor checks restricted to updated markets
+        39.5 [X] Refactor `FixtureCluster::update_markets` to `get_mut` + early return, eliminating side-effecting `and_modify` closures and the double game lookup
+        39.6 [X] Event gating semantics: broadcast on any market change regardless of cluster size (SSE consumers), arbitrage recompute only for multi-game clusters, persist unconditional
+        39.7 [ ] Enforce monitor expiry for untouched markets — expiry is only evaluated for markets present in the filtered diff set, so monitors of markets that stop updating are removed silently (no convergence alert) when they eventually tick again; pre-live sparse-update gap
+        39.8 [ ] Phase-aware monitor policy: pre-live vs live TTL anchored to kickoff, convergence debounce/hysteresis (N consecutive in-band ticks), incident lifecycle with explicit expiry/reminder events instead of silent drops

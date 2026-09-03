@@ -41,13 +41,12 @@ pub async fn get_by_id(
 pub async fn sse_get(
     State(app_state): State<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let mut rx: tokio::sync::broadcast::Receiver<Arc<crate::domain::entities::FixtureCluster>> =
-        app_state.cluster_service.subscribe_to_cluster_updates();
+    let mut rx = app_state.cluster_service.subscribe_to_cluster_updates();
     let stream = async_stream::stream! {
         loop {
             match rx.recv().await {
-                Ok(cluster) => {
-                  let response = ClusterResponse::from(&cluster);
+                Ok(cluster_updated) => {
+                  let response = ClusterResponse::from(&cluster_updated.cluster);
                   yield Ok(Event::default().data(serde_json::to_string(&response).unwrap()))
                 },
                 Err(RecvError::Lagged(_)) => continue,

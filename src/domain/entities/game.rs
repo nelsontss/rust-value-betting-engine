@@ -171,12 +171,17 @@ impl Game {
         )
     }
 
-    pub fn update_markets(&mut self, markets: Vec<Market>) {
+    pub fn update_markets(&mut self, markets: Vec<Market>) -> Vec<MarketType> {
+        let mut updated_markets = Vec::new();
+
         markets.into_iter().for_each(|market| {
             let market_type = MarketType::from(&market);
 
+            updated_markets.push(market_type.clone());
             self.markets.entry(market_type).insert_entry(market);
         });
+
+        updated_markets
     }
 
     pub fn markets(&self) -> &HashMap<MarketType, Market> {

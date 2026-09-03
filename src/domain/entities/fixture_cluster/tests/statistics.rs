@@ -65,7 +65,7 @@ fn statistics_diffs_pairs_polymarket_probs_with_other_platforms_median() {
     let mut cluster = FixtureCluster::new(poly_game);
     assert!(cluster.try_to_add_game(betano_game).is_ok());
 
-    let diffs = cluster.live_statistics_diffs();
+    let diffs = cluster.live_statistics_diffs(&[]);
     let total_type = total_market_type(2.5);
 
     let (over_diff, over_diff_from_no) = diffs[&total_type][&Outcome::Over];
@@ -96,7 +96,7 @@ fn statistics_diffs_are_empty_without_polymarket_game() {
     let mut cluster = FixtureCluster::new(betano_game);
     assert!(cluster.try_to_add_game(bwin_game).is_ok());
 
-    assert!(cluster.live_statistics_diffs().is_empty());
+    assert!(cluster.live_statistics_diffs(&[]).is_empty());
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn statistics_diffs_are_empty_without_other_platforms() {
 
     let cluster = FixtureCluster::new(poly_game);
 
-    assert!(cluster.live_statistics_diffs().is_empty());
+    assert!(cluster.live_statistics_diffs(&[]).is_empty());
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn statistics_diffs_averages_accumulated_ticks() {
     );
 
     // live diff reflects the latest tick only, for both prob sources
-    let live = cluster.live_statistics_diffs();
+    let live = cluster.live_statistics_diffs(&[]);
     let (live_over, live_over_from_no) = live[&total_type][&Outcome::Over];
     let (live_under, live_under_from_no) = live[&total_type][&Outcome::Under];
     assert!((live_over - tick2_over).abs() < 1e-9);
@@ -204,7 +204,7 @@ fn from_persisted_uses_saved_mean_diffs_and_does_not_fabricate_ticks() {
 
     // no fabricated ticks: statistics empty until diffs are persisted for it
     assert!(live_only.statistics_diffs().is_empty());
-    assert!(!live_only.live_statistics_diffs().is_empty());
+    assert!(!live_only.live_statistics_diffs(&[]).is_empty());
 }
 
 #[test]
